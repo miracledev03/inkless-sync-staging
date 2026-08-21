@@ -84,11 +84,19 @@ async function main() {
         } catch {
           return sendJson(res, 400, { ok: false, error: 'invalid_json' });
         }
-        const contactId = body.contactId || body.objectId || body.hs_object_id;
+        // HubSpot workflow webhook payloads vary by template.
+        const contactId =
+          body.contactId ||
+          body.objectId ||
+          body.hs_object_id ||
+          body.vid ||
+          body?.properties?.hs_object_id ||
+          body?.object?.objectId;
         if (!contactId) {
           return sendJson(res, 400, {
             ok: false,
             error: 'contactId required',
+            hint: 'Send { "contactId": "<hubspot contact id>" }',
           });
         }
         const { ensureBlvdClientForContact } = require('./handlers/clients');
