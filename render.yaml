@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: inkless-sync-staging
+    runtime: node
+    plan: free
+    buildCommand: "echo no-build"
+    startCommand: "npm start"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BLVD_ENV
+        value: sandbox
+      - key: HUBSPOT_PORTAL_ID
+        value: "51888138"
+      - key: BLVD_WEBHOOK_PATH
+        value: /webhooks/boulevard
+      - key: HUBSPOT_LOCATION_BLVD_ID_PROPERTY
+        value: location_external_id
+      - key: HUBSPOT_ACCESS_TOKEN
+        sync: false
+      - key: BLVD_BUSINESS_ID
+        sync: false
+      - key: BLVD_API_KEY
+        sync: false
+      - key: BLVD_SECRET_KEY
+        sync: false
+      - key: WEBHOOK_PUBLIC_URL
+        sync: false

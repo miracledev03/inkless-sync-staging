@@ -1,0 +1,21 @@
+{
+  "name": "inkless-sync-middleware",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Inkless Feature 4.1 BLVD <-> HubSpot staging sync",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "smoke:hs": "node scripts/smoke-hubspot.js",
+    "smoke:blvd": "node scripts/smoke-blvd.js",
+    "smoke:gate": "node scripts/smoke-gate.js",
+    "fixtures:staging": "node scripts/create-staging-fixtures.js",
+    "sync:locations": "node scripts/sync-locations.js",
+    "create:client": "node scripts/create-client.js",
+    "discover:services": "node scripts/discover-services.js",
+    "merge:blvd-env": "node scripts/merge-blvd-env.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
