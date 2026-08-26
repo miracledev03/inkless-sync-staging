@@ -11,8 +11,11 @@
     "smoke:gate": "node scripts/smoke-gate.js",
     "fixtures:staging": "node scripts/create-staging-fixtures.js",
     "sync:locations": "node scripts/sync-locations.js",
+    "sync:contacts": "node scripts/sync-contacts.js",
+    "backfill:clients": "node scripts/backfill-clients.js",
     "create:client": "node scripts/create-client.js",
     "discover:services": "node scripts/discover-services.js",
+    "inspect:appointment": "node scripts/inspect-appointment.js",
     "merge:blvd-env": "node scripts/merge-blvd-env.js"
   },
   "engines": {

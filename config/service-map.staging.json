@@ -1,13 +1,13 @@
 {
   "env": "sandbox",
-  "notes": "Fill from BLVD sandbox Admin once services exist. Sandbox currently has an empty service catalog.",
-  "virtual_consult_en": "",
-  "virtual_consult_es": "",
-  "in_office_consult": "",
-  "first_session_100": "",
+  "notes": "Sandbox service IDs captured 2026-08-21",
+  "virtual_consult_en": "urn:blvd:Service:fe325443-c17d-4299-b52e-88c08409d708",
+  "virtual_consult_es": "urn:blvd:Service:0b2121e1-3fb6-4a50-88af-bf400c9f4a15",
+  "in_office_consult": "urn:blvd:Service:595e29d5-abba-44c2-ae42-0773af8e3fa2",
+  "first_session_100": "urn:blvd:Service:b7fb090a-907d-481a-9b5f-2fef8d742c9d",
   "labels": {
-    "virtual_consult_en": "Virtual Free Tattoo Assessment (EN)",
-    "virtual_consult_es": "Virtual Free Tattoo Assessment (ES)",
+    "virtual_consult_en": "Virtual Free Tattoo Assessment EN",
+    "virtual_consult_es": "Virtual Free Tattoo Assessment ES",
     "in_office_consult": "In Office Free Tattoo Assessment",
     "first_session_100": "100 First Session"
   }

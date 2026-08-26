@@ -84,16 +84,70 @@ async function main() {
         } catch {
           return sendJson(res, 400, { ok: false, error: 'invalid_json' });
         }
-        const contactId = body.contactId || body.objectId || body.hs_object_id;
+        // HubSpot workflow webhook payloads vary by template.
+        const contactId =
+          body.contactId ||
+          body.objectId ||
+          body.hs_object_id ||
+          body.vid ||
+          body?.properties?.hs_object_id ||
+          body?.object?.objectId;
         if (!contactId) {
           return sendJson(res, 400, {
             ok: false,
             error: 'contactId required',
+            hint: 'Send { "contactId": "<hubspot contact id>" }',
           });
         }
         const { ensureBlvdClientForContact } = require('./handlers/clients');
         const result = await ensureBlvdClientForContact(config, String(contactId));
         return sendJson(res, 200, { ok: true, ...result });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/sync-contact') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const dryRun = Boolean(body.dryRun);
+        const blvdClientId = body.blvdClientId || body.clientId;
+        if (!blvdClientId) {
+          return sendJson(res, 400, {
+            ok: false,
+            error: 'blvdClientId required',
+          });
+        }
+        const clients = await blvd.listClients(config);
+        const client = clients.find((c) => c.id === blvdClientId);
+        if (!client) {
+          return sendJson(res, 404, { ok: false, error: 'blvd_client_not_found' });
+        }
+        const { upsertContactFromBlvdClient } = require('./handlers/clients');
+        const result = await upsertContactFromBlvdClient(config, client, {
+          dryRun,
+        });
+        return sendJson(res, 200, { ok: true, ...result });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/backfill-clients') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        // Default dry-run for safety; set { "apply": true } to write.
+        const dryRun = body.apply === true ? false : true;
+        const { backfillBlvdClients } = require('./handlers/clients');
+        const result = await backfillBlvdClients(config, {
+          dryRun,
+          limit: body.limit,
+        });
+        return sendJson(res, 200, { ok: result.errors === 0, ...result });
       }
 
       sendJson(res, 404, { ok: false, error: 'not_found' });

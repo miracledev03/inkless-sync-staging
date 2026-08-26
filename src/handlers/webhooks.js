@@ -97,13 +97,30 @@ function createWebhookHandler(config) {
     idempotency.mark(idemKey, { eventType, savedTo });
     log.info('webhook received', { eventType, signatureValid, savedTo });
 
-    // Phase A: persist only. Location/appt handlers land in later tickets.
     if (String(eventType).startsWith('LOCATION_')) {
       log.info('location webhook queued for sync', { eventType });
     }
 
+    let appointment = null;
+    const { isAppointmentEvent, processAppointmentWebhook } = require('./appointments');
+    if (isAppointmentEvent(eventType)) {
+      try {
+        appointment = await processAppointmentWebhook(config, {
+          eventType,
+          payload,
+          headers,
+        });
+      } catch (err) {
+        log.error('appointment webhook classify failed', {
+          eventType,
+          error: err.message,
+        });
+        appointment = { action: 'error', write: false, error: err.message };
+      }
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true }));
+    res.end(JSON.stringify({ ok: true, appointment }));
   };
 }
 

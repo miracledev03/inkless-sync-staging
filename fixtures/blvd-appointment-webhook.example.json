@@ -1,0 +1,7 @@
+{
+  "eventType": "APPOINTMENT_CANCELLED",
+  "resourceId": "urn:blvd:Appointment:c3253094-cdfc-4730-9b48-daec2bdc98af",
+  "data": {
+    "id": "urn:blvd:Appointment:c3253094-cdfc-4730-9b48-daec2bdc98af"
+  }
+}

@@ -58,6 +58,28 @@ function getConfig() {
     locationBlvdIdProperty:
       process.env.HUBSPOT_LOCATION_BLVD_ID_PROPERTY ||
       'location_external_id',
+    /** Lifecycle label for A6 historical backfill (Joey). */
+    importedBlvdLifecycleLabel:
+      process.env.HUBSPOT_IMPORTED_BLVD_LIFECYCLE_LABEL || 'Imported - BLVD',
+    /**
+     * Optional hard-coded lifecyclestage value. When empty, resolved/created
+     * via ensureImportedBlvdLifecycleStage (sandbox: 1422909443).
+     */
+    importedBlvdLifecycleValue:
+      process.env.HUBSPOT_IMPORTED_BLVD_LIFECYCLE_VALUE || '',
+    appointmentObject:
+      process.env.HUBSPOT_APPOINTMENT_OBJECT || 'blvd_appointments',
+    appointmentIdProperty:
+      process.env.HUBSPOT_APPOINTMENT_ID_PROPERTY || 'blvd_appointment_id',
+    appointmentOriginProperty:
+      process.env.HUBSPOT_APPOINTMENT_ORIGIN_PROPERTY ||
+      'blvd_appointment_source',
+    appointmentServiceObject:
+      process.env.HUBSPOT_APPOINTMENT_SERVICE_OBJECT ||
+      'blvd_appointment_services',
+    appointmentServiceIdProperty:
+      process.env.HUBSPOT_APPOINTMENT_SERVICE_ID_PROPERTY ||
+      'blvd_appointment_service_id',
   };
 }
 

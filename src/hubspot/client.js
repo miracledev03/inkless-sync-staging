@@ -57,7 +57,13 @@ async function resolveObjectTypeId(token, preferredName) {
   };
 }
 
-async function searchByProperty(token, objectType, propertyName, value) {
+async function searchByProperty(
+  token,
+  objectType,
+  propertyName,
+  value,
+  properties = []
+) {
   return hsRequest(token, 'POST', `/crm/v3/objects/${objectType}/search`, {
     filterGroups: [
       {
@@ -70,8 +76,18 @@ async function searchByProperty(token, objectType, propertyName, value) {
         ],
       },
     ],
+    properties: properties.length ? properties : [propertyName],
     limit: 5,
   });
+}
+
+/** Unlabeled default association (v4). */
+async function associateDefault(token, fromType, fromId, toType, toId) {
+  return hsRequest(
+    token,
+    'PUT',
+    `/crm/v4/objects/${fromType}/${fromId}/associations/default/${toType}/${toId}`
+  );
 }
 
 async function createObject(token, objectType, properties) {
@@ -97,13 +113,60 @@ async function updateContact(token, id, properties) {
   return updateObject(token, 'contacts', id, properties);
 }
 
+async function createContact(token, properties) {
+  return createObject(token, 'contacts', properties);
+}
+
+async function searchContacts(token, filterGroups, properties = [], limit = 5) {
+  return hsRequest(token, 'POST', '/crm/v3/objects/contacts/search', {
+    filterGroups,
+    properties,
+    limit,
+  });
+}
+
+/**
+ * Ensure "Imported - BLVD" exists on the contact lifecycle pipeline.
+ * Returns the lifecyclestage option value (stage id).
+ */
+async function ensureImportedBlvdLifecycleStage(
+  token,
+  label = 'Imported - BLVD'
+) {
+  const prop = await hsRequest(
+    token,
+    'GET',
+    '/crm/v3/properties/contacts/lifecyclestage'
+  );
+  const existing = (prop.options || []).find(
+    (o) => String(o.label).toLowerCase() === label.toLowerCase()
+  );
+  if (existing) return existing.value;
+
+  const created = await hsRequest(
+    token,
+    'POST',
+    '/crm/v3/pipelines/contacts/contacts-lifecycle-pipeline/stages',
+    {
+      label,
+      displayOrder: 0,
+      metadata: { isClosed: 'false', state: 'OPEN' },
+    }
+  );
+  return created.id;
+}
+
 module.exports = {
   hsRequest,
   listSchemas,
   resolveObjectTypeId,
   searchByProperty,
+  associateDefault,
   createObject,
   updateObject,
   getContact,
   updateContact,
+  createContact,
+  searchContacts,
+  ensureImportedBlvdLifecycleStage,
 };

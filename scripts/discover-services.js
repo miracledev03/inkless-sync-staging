@@ -22,15 +22,18 @@ async function main() {
   const rules = [
     {
       key: 'virtual_consult_en',
-      match: /virtual.*(en|english)|english.*virtual|assessment.*en/i,
+      // Prefer explicit EN token; avoid matching the "en" inside "Assessment"
+      match: /\bEN\b|english/i,
+      require: /virtual/i,
     },
     {
       key: 'virtual_consult_es',
-      match: /virtual.*(es|spanish)|spanish.*virtual|assessment.*es/i,
+      match: /\bES\b|spanish/i,
+      require: /virtual/i,
     },
     {
       key: 'in_office_consult',
-      match: /in[- ]?office|in person|tattoo assessment/i,
+      match: /in[- ]?office|in[- ]?person/i,
     },
     {
       key: 'first_session_100',
@@ -39,7 +42,10 @@ async function main() {
   ];
 
   for (const rule of rules) {
-    const hit = services.find((s) => rule.match.test(s.name));
+    const hit = services.find((s) => {
+      if (rule.require && !rule.require.test(s.name)) return false;
+      return rule.match.test(s.name);
+    });
     if (hit) {
       map[rule.key] = hit.id;
       console.log(`Mapped ${rule.key} -> ${hit.name}`);
