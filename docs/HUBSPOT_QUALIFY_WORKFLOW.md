@@ -4,7 +4,7 @@ Portal: **51888138** (sandbox only)
 
 Middleware endpoint:
 
-`POST https://inkless-sync-staging.onrender.com/create-client`
+`POST https://inkless-sync-staging-rubetech.onrender.com/create-client`
 
 Body:
 
@@ -22,7 +22,7 @@ Body:
 5. Re-enrollment: **Off** for staging (or On only if testing repeatedly)
 6. Add action → **Send a webhook** (or **Webhook**):
    - Method: `POST`
-   - URL: `https://inkless-sync-staging.onrender.com/create-client`
+   - URL: `https://inkless-sync-staging-rubetech.onrender.com/create-client`
    - Body type: JSON
    - Body:
      ```json
@@ -47,11 +47,11 @@ Body:
 
 ```powershell
 # Warm free tier
-Invoke-RestMethod https://inkless-sync-staging.onrender.com/health
+Invoke-RestMethod https://inkless-sync-staging-rubetech.onrender.com/health
 
 # Replace CONTACT_ID
 Invoke-RestMethod -Method POST `
-  -Uri https://inkless-sync-staging.onrender.com/create-client `
+  -Uri https://inkless-sync-staging-rubetech.onrender.com/create-client `
   -ContentType 'application/json' `
   -Body '{"contactId":"CONTACT_ID"}'
 ```
