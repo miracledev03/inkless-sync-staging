@@ -194,6 +194,80 @@ async function listServices(config, first = 50) {
   return (data.services?.edges || []).map((e) => e.node);
 }
 
+const ORDER_NODE = `
+  id
+  number
+  clientId
+  locationId
+  closedAt
+  createdAt
+  note
+  summary {
+    currentTotal
+    currentSubtotal
+    refundAmount
+  }
+  paymentGroups {
+    payments { paidAmount }
+  }
+  lineGroups {
+    __typename
+    ... on OrderAppointmentLineGroup {
+      lines {
+        __typename
+        ... on OrderServiceLine { name serviceId currentPrice }
+      }
+    }
+    ... on OrderRetailLineGroup {
+      lines {
+        __typename
+        ... on OrderProductLine { name currentPrice }
+      }
+    }
+  }
+`;
+
+async function getOrder(config, id) {
+  if (!id) return null;
+  try {
+    const data = await gql(
+      config,
+      `query($id: ID!) {
+        order(id: $id) { ${ORDER_NODE} }
+      }`,
+      { id }
+    );
+    return data.order;
+  } catch (err) {
+    if (/not found|does not exist|need access/i.test(String(err.message))) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Find BLVD appointment linked to an order (appointment.orderId match).
+ */
+async function findAppointmentByOrderId(config, { orderId, clientId, locationId }) {
+  if (!orderId || !clientId || !locationId) return null;
+  const data = await gql(
+    config,
+    `query($locationId: ID!, $clientId: ID!, $first: Int!) {
+      appointments(locationId: $locationId, clientId: $clientId, first: $first) {
+        edges {
+          node { id orderId }
+        }
+      }
+    }`,
+    { locationId, clientId, first: 50 }
+  );
+  for (const edge of data.appointments?.edges || []) {
+    if (edge?.node?.orderId === orderId) return edge.node;
+  }
+  return null;
+}
+
 module.exports = {
   getBusiness,
   listLocations,
@@ -201,5 +275,7 @@ module.exports = {
   listClients,
   createClient,
   getAppointment,
+  getOrder,
+  findAppointmentByOrderId,
   listServices,
 };

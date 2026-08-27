@@ -119,8 +119,26 @@ function createWebhookHandler(config) {
       }
     }
 
+    let order = null;
+    const { isOrderEvent, processOrderWebhook } = require('./orders');
+    if (isOrderEvent(eventType)) {
+      try {
+        order = await processOrderWebhook(config, {
+          eventType,
+          payload,
+          headers,
+        });
+      } catch (err) {
+        log.error('order webhook failed', {
+          eventType,
+          error: err.message,
+        });
+        order = { action: 'error', write: false, error: err.message };
+      }
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, appointment }));
+    res.end(JSON.stringify({ ok: true, appointment, order }));
   };
 }
 

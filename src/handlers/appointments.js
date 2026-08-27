@@ -434,6 +434,24 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
     services: serviceUpserts.length,
   });
 
+  if (appointment.orderId) {
+    try {
+      const { processOrderUpsert } = require('./orders');
+      result.order = await processOrderUpsert(config, {
+        orderId: appointment.orderId,
+        appointmentId: appointment.id,
+        eventType: 'ORDER_COMPLETED',
+      });
+    } catch (err) {
+      log.warn('order upsert after appointment failed', {
+        appointmentId: appointment.id,
+        orderId: appointment.orderId,
+        error: err.message,
+      });
+      result.order = { action: 'error', error: err.message };
+    }
+  }
+
   return result;
 }
 

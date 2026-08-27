@@ -16,6 +16,7 @@
     "create:client": "node scripts/create-client.js",
     "discover:services": "node scripts/discover-services.js",
     "inspect:appointment": "node scripts/inspect-appointment.js",
+    "inspect:order": "node scripts/inspect-order.js",
     "merge:blvd-env": "node scripts/merge-blvd-env.js"
   },
   "engines": {

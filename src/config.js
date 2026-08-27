@@ -80,6 +80,9 @@ function getConfig() {
     appointmentServiceIdProperty:
       process.env.HUBSPOT_APPOINTMENT_SERVICE_ID_PROPERTY ||
       'blvd_appointment_service_id',
+    orderObject: process.env.HUBSPOT_ORDER_OBJECT || 'blvd_orders',
+    orderIdProperty:
+      process.env.HUBSPOT_ORDER_ID_PROPERTY || 'blvd_order_id',
   };
 }
 
