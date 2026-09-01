@@ -14,6 +14,7 @@
     "sync:contacts": "node scripts/sync-contacts.js",
     "backfill:clients": "node scripts/backfill-clients.js",
     "create:client": "node scripts/create-client.js",
+    "verify:qualify": "node scripts/verify-qualify-path.js",
     "discover:services": "node scripts/discover-services.js",
     "inspect:appointment": "node scripts/inspect-appointment.js",
     "inspect:order": "node scripts/inspect-order.js",

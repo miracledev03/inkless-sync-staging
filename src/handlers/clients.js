@@ -1,6 +1,8 @@
 const blvd = require('../blvd/api');
 const hs = require('../hubspot/client');
 const log = require('../logger');
+const { STAGE } = require('../acquisition-stages');
+const { ensureAcquisitionDeal } = require('../acquisition-deals');
 
 const CONTACT_PROPS = [
   'firstname',
@@ -419,8 +421,48 @@ async function ensureBlvdClientForContact(config, contactId) {
   return { action: 'created', contactId, blvdClientId: created.id };
 }
 
+/**
+ * Qualified & Engaged path: BLVD createClient + Acquisition Deal at New Opportunity.
+ * HubSpot workflow calls POST /create-client when lifecycle becomes Qualified & Engaged.
+ */
+async function processQualifyPath(config, contactId) {
+  const propsNeeded = [
+    'firstname',
+    'lastname',
+    'email',
+    config.blvdClientIdProperty,
+    config.languageProperty || 'language',
+  ];
+  const contact = await hs.getContact(
+    config.hubspotToken,
+    contactId,
+    propsNeeded
+  );
+  const name =
+    [contact.properties?.firstname, contact.properties?.lastname]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || 'Contact';
+
+  const blvd = await ensureBlvdClientForContact(config, contactId);
+  const deal = await ensureAcquisitionDeal(config, contactId, {
+    dealStage: STAGE.newOpportunity,
+    dealName: `Acquisition — ${name}`,
+  });
+
+  log.info('qualify path complete', {
+    contactId,
+    blvdAction: blvd.action,
+    dealAction: deal.action,
+    dealId: deal.dealId,
+  });
+
+  return { blvd, acquisitionDeal: deal };
+}
+
 module.exports = {
   ensureBlvdClientForContact,
+  processQualifyPath,
   upsertContactFromBlvdClient,
   backfillBlvdClients,
   mapBlvdClientToContactProps,

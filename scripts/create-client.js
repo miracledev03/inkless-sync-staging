@@ -1,5 +1,5 @@
 const { getConfig } = require('../src/config');
-const { ensureBlvdClientForContact } = require('../src/handlers/clients');
+const { processQualifyPath } = require('../src/handlers/clients');
 
 async function main() {
   const contactId = process.argv[2];
@@ -8,7 +8,7 @@ async function main() {
     process.exit(1);
   }
   const config = getConfig();
-  const result = await ensureBlvdClientForContact(config, contactId);
+  const result = await processQualifyPath(config, contactId);
   console.log(JSON.stringify(result, null, 2));
 }
 

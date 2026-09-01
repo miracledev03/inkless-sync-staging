@@ -99,8 +99,8 @@ async function main() {
             hint: 'Send { "contactId": "<hubspot contact id>" }',
           });
         }
-        const { ensureBlvdClientForContact } = require('./handlers/clients');
-        const result = await ensureBlvdClientForContact(config, String(contactId));
+        const { processQualifyPath } = require('./handlers/clients');
+        const result = await processQualifyPath(config, String(contactId));
         return sendJson(res, 200, { ok: true, ...result });
       }
 
