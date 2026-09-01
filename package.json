@@ -17,6 +17,7 @@
     "discover:services": "node scripts/discover-services.js",
     "inspect:appointment": "node scripts/inspect-appointment.js",
     "inspect:order": "node scripts/inspect-order.js",
+    "inspect:matrix": "node scripts/inspect-matrix.js",
     "merge:blvd-env": "node scripts/merge-blvd-env.js"
   },
   "engines": {

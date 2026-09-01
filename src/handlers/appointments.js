@@ -294,12 +294,51 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
   };
 
   if (!write) {
+    let contactIdForMatrix = null;
+    const blvdClientId = appointment.clientId || appointment.client?.id;
+    if (blvdClientId) {
+      try {
+        const contacts = await hs.searchContacts(
+          config.hubspotToken,
+          [
+            {
+              filters: [
+                {
+                  propertyName: config.blvdClientIdProperty,
+                  operator: 'EQ',
+                  value: blvdClientId,
+                },
+              ],
+            },
+          ],
+          [config.blvdClientIdProperty],
+          1
+        );
+        contactIdForMatrix = contacts.results?.[0]?.id || null;
+      } catch {
+        contactIdForMatrix = null;
+      }
+    }
+    let matrix = null;
+    try {
+      const { applyInPersonConsultMatrix } = require('./acquisition-matrix');
+      matrix = await applyInPersonConsultMatrix(config, {
+        appointment,
+        eventType: type,
+        classification,
+        contactId: contactIdForMatrix,
+        dryRun: true,
+      });
+    } catch (err) {
+      matrix = { error: err.message };
+    }
     log.info('appointment webhook classified (dry-run)', {
       eventType: type,
       appointmentId: appointment.id,
       origin,
       pipeline: result.pipeline,
     });
+    result.matrix = matrix;
     return result;
   }
 
@@ -424,6 +463,25 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
     services: serviceUpserts,
     associations,
   };
+
+  const contactIdForMatrix = associations.contact?.contactId || null;
+  try {
+    const { applyInPersonConsultMatrix } = require('./acquisition-matrix');
+    result.matrix = await applyInPersonConsultMatrix(config, {
+      appointment,
+      eventType: type,
+      classification,
+      contactId: contactIdForMatrix,
+      appointmentHsId: apptUpsert.hsId,
+      appointmentObjectTypeId: apptMeta.objectTypeId,
+    });
+  } catch (err) {
+    log.warn('in-person consult matrix failed', {
+      appointmentId: appointment.id,
+      error: err.message,
+    });
+    result.matrix = { error: err.message };
+  }
 
   log.info('appointment upserted to HubSpot', {
     eventType: type,
