@@ -18,6 +18,7 @@
     "inspect:appointment": "node scripts/inspect-appointment.js",
     "inspect:order": "node scripts/inspect-order.js",
     "inspect:matrix": "node scripts/inspect-matrix.js",
+    "check:staging": "node scripts/check-staging-host.js",
     "merge:blvd-env": "node scripts/merge-blvd-env.js"
   },
   "engines": {

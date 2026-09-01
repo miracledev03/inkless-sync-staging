@@ -483,6 +483,22 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
     result.matrix = { error: err.message };
   }
 
+  if (contactIdForMatrix && result.consultationType) {
+    try {
+      const { syncOpenAcquisitionDealProperties } = require('../deal-properties');
+      result.dealProperties = await syncOpenAcquisitionDealProperties(config, {
+        contactId: contactIdForMatrix,
+        consultationType: result.consultationType,
+      });
+    } catch (err) {
+      log.warn('B9 deal property sync failed', {
+        appointmentId: appointment.id,
+        error: err.message,
+      });
+      result.dealProperties = { error: err.message };
+    }
+  }
+
   log.info('appointment upserted to HubSpot', {
     eventType: type,
     appointmentId: appointment.id,
