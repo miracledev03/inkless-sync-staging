@@ -56,9 +56,18 @@ async function main() {
   });
 
   checks.push({
-    name: 'webhook path',
-    ok: config.webhookPath === '/webhooks/boulevard',
-    detail: `${STAGING}${config.webhookPath}`,
+    name: 'HubSpot webhook URL',
+    ok: Boolean(
+      (process.env.HUBSPOT_WEBHOOK_PUBLIC_URL || '').includes(
+        'inkless-sync-staging-rubetech'
+      ) ||
+        (process.env.WEBHOOK_PUBLIC_URL || '').includes(
+          'inkless-sync-staging-rubetech'
+        )
+    ),
+    detail:
+      process.env.HUBSPOT_WEBHOOK_PUBLIC_URL ||
+      `${STAGING}/webhooks/hubspot`,
   });
 
   console.log(`Staging host check — ${STAGING}\n`);

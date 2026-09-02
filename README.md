@@ -34,7 +34,8 @@ npm run merge:blvd-env
 - `GET /health/hubspot`
 - `GET /health/services`
 - `POST /webhooks/boulevard` (HMAC verified; appointment events upsert HubSpot Appointment + Appointment Service)
-- `POST /create-client` `{ "contactId": "..." }`
+- `POST /webhooks/hubspot` (CRM webhook; Qualified & Engaged → createClient + Acquisition Deal)
+- `POST /create-client` `{ "contactId": "..." }` (manual / dev fallback)
 - `POST /sync-contact` `{ "blvdClientId": "...", "dryRun": true }`
 - `POST /backfill-clients` `{ "apply": false, "limit": 10 }` (default dry-run)
 
@@ -45,7 +46,7 @@ Phase B Origin System notes: `../docs/Inkless_4.1_Origin_System_Phase_B.md`.
 - A1–A4, A7: auth, webhooks, locations, createClient, service map
 - A5: `npm run sync:contacts` (or `/sync-contact`)
 - A6: `npm run backfill:clients` dry-run → Imported - BLVD (`1422909443` in sandbox)
-- Optional UI: qualify workflow → `/create-client` (see `../docs/HUBSPOT_QUALIFY_WORKFLOW.md`)
+- Qualify trigger: private app CRM webhook → `/webhooks/hubspot` (Dan: `docs/HUBSPOT_CRM_WEBHOOK_SETUP.md`; setup: `docs/HUBSPOT_CRM_WEBHOOK_INTERNAL.md`)
 
 ## Host for client demos
 

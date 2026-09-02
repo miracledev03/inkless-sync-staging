@@ -3,6 +3,7 @@ const { getConfig, loadServiceMap } = require('./config');
 const log = require('./logger');
 const blvd = require('./blvd/api');
 const { createWebhookHandler } = require('./handlers/webhooks');
+const { createHubSpotWebhookHandler } = require('./handlers/hubspot-webhooks');
 
 async function readBody(req) {
   const chunks = [];
@@ -18,6 +19,7 @@ function sendJson(res, status, body) {
 async function main() {
   const config = getConfig();
   const handleWebhook = createWebhookHandler(config);
+  const handleHubSpotWebhook = createHubSpotWebhookHandler(config);
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -74,6 +76,14 @@ async function main() {
       ) {
         const rawBody = await readBody(req);
         return handleWebhook(req, res, rawBody);
+      }
+
+      if (
+        req.method === 'POST' &&
+        url.pathname === config.hubspotWebhookPath
+      ) {
+        const rawBody = await readBody(req);
+        return handleHubSpotWebhook(req, res, rawBody);
       }
 
       if (req.method === 'POST' && url.pathname === '/create-client') {
@@ -170,6 +180,7 @@ async function main() {
     log.info('middleware listening', {
       port: config.port,
       webhookPath: config.webhookPath,
+      hubspotWebhookPath: config.hubspotWebhookPath,
       portalId: config.hubspotPortalId,
       blvdEnv: config.blvdEnv,
     });

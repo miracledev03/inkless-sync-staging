@@ -49,6 +49,21 @@ function getConfig() {
     port: Number(process.env.PORT || 3456),
     webhookPath: process.env.BLVD_WEBHOOK_PATH || '/webhooks/boulevard',
     webhookPublicUrl: process.env.WEBHOOK_PUBLIC_URL || '',
+    hubspotWebhookPath:
+      process.env.HUBSPOT_WEBHOOK_PATH || '/webhooks/hubspot',
+    hubspotWebhookPublicUrl:
+      process.env.HUBSPOT_WEBHOOK_PUBLIC_URL ||
+      (process.env.WEBHOOK_PUBLIC_URL
+        ? String(process.env.WEBHOOK_PUBLIC_URL).replace(
+            /\/webhooks\/boulevard\/?$/,
+            '/webhooks/hubspot'
+          )
+        : ''),
+    hubspotClientSecret: process.env.HUBSPOT_CLIENT_SECRET || '',
+    hubspotWebhookSkipVerify: process.env.HUBSPOT_WEBHOOK_SKIP_VERIFY || '',
+    /** Qualified & Engaged lifecycle internal value (portal 51888138). */
+    qualifiedLifecycleValue:
+      process.env.HUBSPOT_QUALIFIED_LIFECYCLE_VALUE || '1409285288',
     serviceMapPath:
       process.env.SERVICE_MAP_PATH || './config/service-map.staging.json',
     languageProperty: process.env.HUBSPOT_LANGUAGE_PROPERTY || 'language',
