@@ -371,6 +371,52 @@ async function processOrderUpsert(
   return result;
 }
 
+/**
+ * Mark linked HubSpot order Refunded when First Session appointment is cancelled.
+ * BLVD void mutation not in scope — HubSpot record reflects void for staging.
+ */
+async function voidOrderForAppointment(config, { orderId, appointmentId }) {
+  if (!orderId) {
+    return { action: 'skipped', reason: 'no_order_on_appointment' };
+  }
+
+  const orderMeta = await hs.resolveObjectTypeId(
+    config.hubspotToken,
+    config.orderObject
+  );
+  const orderIdProperty = config.orderIdProperty || 'blvd_order_id';
+  const existing = await hs.searchByProperty(
+    config.hubspotToken,
+    orderMeta.objectTypeId,
+    orderIdProperty,
+    orderId,
+    [orderIdProperty, 'blvd_order_status', 'blvd_appointment_id']
+  );
+  const hit = existing.results?.[0];
+  if (!hit) {
+    return {
+      action: 'skipped',
+      reason: 'order_not_in_hubspot',
+      orderId,
+      appointmentId,
+    };
+  }
+
+  await hs.updateObject(config.hubspotToken, orderMeta.objectTypeId, hit.id, {
+    blvd_order_status: 'Refunded',
+    blvd_appointment_id: appointmentId || hit.properties?.blvd_appointment_id,
+    last_synced_at: String(Date.now()),
+  });
+
+  log.info('order voided on hubspot (appointment cancel)', {
+    orderId,
+    hsOrderId: hit.id,
+    appointmentId,
+  });
+
+  return { action: 'voided', hsOrderId: hit.id, orderId };
+}
+
 async function processOrderWebhook(config, { eventType, payload, headers, dryRun }) {
   const type = normalizeEventType(eventType);
   const orderId = parseOrderId(payload, headers);
@@ -396,5 +442,6 @@ module.exports = {
   parseOrderId,
   processOrderUpsert,
   processOrderWebhook,
+  voidOrderForAppointment,
   mapOrderStatus,
 };

@@ -1,8 +1,10 @@
 const hs = require('../hubspot/client');
 const log = require('../logger');
 const { resolveInPersonConsultMatrix } = require('../matrix/in-person-consult');
+const { resolveFirstSession100Matrix } = require('../matrix/first-session-100');
 const { ensureAcquisitionDeal } = require('../acquisition-deals');
 const { plannedDealPropertyUpdates } = require('../deal-properties');
+const { voidOrderForAppointment } = require('./orders');
 
 async function associateQuiet(token, fromType, fromId, toType, toId) {
   if (!fromId || !toId) return { ok: false, skipped: true };
@@ -22,14 +24,42 @@ async function incrementNoShowCount(token, contactId) {
   return { from: current, to: next };
 }
 
-/**
- * Apply in-person consult matrix to Contact + Acquisition Deal (spec §7.1).
- */
-async function applyInPersonConsultMatrix(
+async function fetchContactLifecycle(config, contactId) {
+  if (!contactId) return null;
+  const contact = await hs.getContact(config.hubspotToken, contactId, [
+    'lifecyclestage',
+  ]);
+  return contact.properties?.lifecyclestage || null;
+}
+
+function resolveMatrixForRole(
+  appointment,
+  eventType,
+  classification,
+  contactLifecycle,
+  config
+) {
+  const role = classification?.primary?.role;
+  if (role === 'first_session_100') {
+    return resolveFirstSession100Matrix(
+      appointment,
+      eventType,
+      classification,
+      contactLifecycle,
+      config
+    );
+  }
+  if (role === 'in_office_consult') {
+    return resolveInPersonConsultMatrix(appointment, eventType, classification);
+  }
+  return { apply: false, reason: 'no_boulevard_matrix_for_role', role };
+}
+
+async function applyMatrixResult(
   config,
   {
+    matrix,
     appointment,
-    eventType,
     classification,
     contactId,
     appointmentHsId,
@@ -37,18 +67,14 @@ async function applyInPersonConsultMatrix(
     dryRun,
   }
 ) {
-  const matrix = resolveInPersonConsultMatrix(
-    appointment,
-    eventType,
-    classification
-  );
-
   const result = {
     matrix,
     contactId: contactId || null,
     deal: null,
     lifecycle: null,
     noShowCount: null,
+    orderVoid: null,
+    treatmentJourney: null,
     associations: null,
     write: dryRun !== true,
   };
@@ -65,15 +91,29 @@ async function applyInPersonConsultMatrix(
       dealStage: matrix.dealStage,
       lifecycle: matrix.lifecycle,
       incrementNoShow: matrix.incrementNoShow,
+      voidOrder: matrix.voidOrder,
+      createTreatmentJourney: matrix.createTreatmentJourney,
     };
+    if (matrix.lifecycle === null && matrix.path === 'skipped_consult') {
+      result.planned.lifecycleNote =
+        'skipped_consult cancel needs Consultation No-Show/Cancel lifecycle in HubSpot';
+    }
     return result;
   }
 
-  const consultType = classification?.primary?.consultationType || 'In-Person';
+  const role = classification?.primary?.role;
+  const consultType = classification?.primary?.consultationType || null;
+  const firstName =
+    appointment.client?.firstName || appointment.client?.first_name || 'Contact';
+  const dealName =
+    role === 'first_session_100'
+      ? `First Session — ${firstName}`.trim()
+      : `In-Person Consult — ${firstName}`.trim();
+
   const dealEnsure = await ensureAcquisitionDeal(config, contactId, {
     dealStage: matrix.dealStage,
-    consultationType: consultType,
-    dealName: `In-Person Consult — ${appointment.client?.firstName || 'Contact'}`.trim(),
+    consultationType: consultType || undefined,
+    dealName,
   });
 
   const langProp = config.languageProperty || 'language';
@@ -111,6 +151,20 @@ async function applyInPersonConsultMatrix(
       lifecyclestage: matrix.lifecycle,
     });
     result.lifecycle = { set: matrix.lifecycle };
+  } else if (
+    matrix.path === 'skipped_consult' &&
+    matrix.outcome &&
+    matrix.outcome !== 'Scheduled'
+  ) {
+    log.warn('first session skipped-consult cancel: lifecycle stage missing', {
+      contactId,
+      appointmentId: appointment.id,
+      hint: 'Add Consultation No-Show/Cancel in HubSpot or set HUBSPOT_CONSULTATION_NOSHOW_LIFECYCLE_VALUE',
+    });
+    result.lifecycle = {
+      skipped: true,
+      reason: 'consultation_noshow_cancel_lifecycle_not_configured',
+    };
   }
 
   if (matrix.incrementNoShow) {
@@ -118,6 +172,24 @@ async function applyInPersonConsultMatrix(
       config.hubspotToken,
       contactId
     );
+  }
+
+  if (matrix.voidOrder && appointment.orderId) {
+    result.orderVoid = await voidOrderForAppointment(config, {
+      orderId: appointment.orderId,
+      appointmentId: appointment.id,
+    });
+  }
+
+  if (matrix.createTreatmentJourney) {
+    result.treatmentJourney = {
+      action: 'deferred',
+      reason: 'c3_treatment_journey_handoff_not_implemented',
+    };
+    log.info('first session final: C3 Treatment Journey handoff pending', {
+      contactId,
+      dealId: dealEnsure.dealId,
+    });
   }
 
   if (appointmentHsId && appointmentObjectTypeId) {
@@ -131,19 +203,72 @@ async function applyInPersonConsultMatrix(
     result.associations = { dealToAppointment: dealToAppt };
   }
 
-  log.info('in-person consult matrix applied', {
+  log.info('acquisition matrix applied', {
+    matrix: matrix.matrix,
     appointmentId: appointment.id,
     contactId,
     dealId: dealEnsure.dealId,
     dealStage: matrix.dealStage,
     lifecycle: matrix.lifecycle,
+    path: matrix.path,
     incrementNoShow: matrix.incrementNoShow,
+    voidOrder: matrix.voidOrder,
   });
 
   return result;
 }
 
+/**
+ * Apply Boulevard-driven Acquisition matrix (in-person consult or First Session).
+ */
+async function applyAcquisitionMatrix(
+  config,
+  {
+    appointment,
+    eventType,
+    classification,
+    contactId,
+    contactLifecycle,
+    appointmentHsId,
+    appointmentObjectTypeId,
+    dryRun,
+  }
+) {
+  let lifecycle = contactLifecycle;
+  const role = classification?.primary?.role;
+  if (role === 'first_session_100' && lifecycle === undefined && contactId) {
+    lifecycle = await fetchContactLifecycle(config, contactId);
+  }
+
+  const matrix = resolveMatrixForRole(
+    appointment,
+    eventType,
+    classification,
+    lifecycle,
+    config
+  );
+
+  return applyMatrixResult(config, {
+    matrix,
+    appointment,
+    classification,
+    contactId,
+    appointmentHsId,
+    appointmentObjectTypeId,
+    dryRun,
+  });
+}
+
+/** @deprecated use applyAcquisitionMatrix */
+async function applyInPersonConsultMatrix(config, opts) {
+  return applyAcquisitionMatrix(config, opts);
+}
+
 module.exports = {
+  applyAcquisitionMatrix,
   applyInPersonConsultMatrix,
   resolveInPersonConsultMatrix,
+  resolveFirstSession100Matrix,
+  resolveMatrixForRole,
+  fetchContactLifecycle,
 };

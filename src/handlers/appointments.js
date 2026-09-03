@@ -321,8 +321,8 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
     }
     let matrix = null;
     try {
-      const { applyInPersonConsultMatrix } = require('./acquisition-matrix');
-      matrix = await applyInPersonConsultMatrix(config, {
+      const { applyAcquisitionMatrix } = require('./acquisition-matrix');
+      matrix = await applyAcquisitionMatrix(config, {
         appointment,
         eventType: type,
         classification,
@@ -466,8 +466,8 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
 
   const contactIdForMatrix = associations.contact?.contactId || null;
   try {
-    const { applyInPersonConsultMatrix } = require('./acquisition-matrix');
-    result.matrix = await applyInPersonConsultMatrix(config, {
+    const { applyAcquisitionMatrix } = require('./acquisition-matrix');
+    result.matrix = await applyAcquisitionMatrix(config, {
       appointment,
       eventType: type,
       classification,
@@ -476,7 +476,7 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
       appointmentObjectTypeId: apptMeta.objectTypeId,
     });
   } catch (err) {
-    log.warn('in-person consult matrix failed', {
+    log.warn('acquisition matrix failed', {
       appointmentId: appointment.id,
       error: err.message,
     });

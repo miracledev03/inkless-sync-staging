@@ -1,8 +1,7 @@
 const { getConfig } = require('../src/config');
-const { loadServiceMap } = require('../src/config');
 const blvd = require('../src/blvd/api');
 const { classifyAppointmentServices } = require('../src/classify-service');
-const { resolveInPersonConsultMatrix } = require('../src/matrix/in-person-consult');
+const { resolveMatrixForRole } = require('../src/handlers/acquisition-matrix');
 
 async function main() {
   const config = getConfig();
@@ -12,6 +11,9 @@ async function main() {
   const eventType =
     process.argv.find((a) => a.startsWith('--event='))?.slice(8) ||
     'APPOINTMENT_CREATED';
+  const lifecycleArg = process.argv
+    .find((a) => a.startsWith('--lifecycle='))
+    ?.slice(12);
 
   const appointment = await blvd.getAppointment(config, appointmentId);
   if (!appointment) {
@@ -23,18 +25,22 @@ async function main() {
     config,
     appointment.appointmentServices || []
   );
-  const matrix = resolveInPersonConsultMatrix(
+  const matrix = resolveMatrixForRole(
     appointment,
     eventType,
-    classification
+    classification,
+    lifecycleArg || null,
+    config
   );
 
   console.log('appointment', appointment.id);
   console.log('state', appointment.state);
   console.log('cancelled', appointment.cancelled);
   console.log('cancellation', appointment.cancellation);
+  console.log('orderId', appointment.orderId);
   console.log('primary role', classification.primary?.role);
   console.log('outcome driver', classification.primary?.outcomeDriver);
+  if (lifecycleArg) console.log('contact lifecycle (override)', lifecycleArg);
   console.log('--- matrix ---');
   console.log(JSON.stringify(matrix, null, 2));
 }

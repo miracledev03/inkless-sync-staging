@@ -15,6 +15,10 @@ const STAGE = {
 const LIFECYCLE = {
   consultationBooked: '1409274217',
   consultationAttended: '1409285289',
+  qualifiedEngaged: '1409285288',
+  activeCustomer: 'customer',
+  /** Set via HUBSPOT_CONSULTATION_NOSHOW_LIFECYCLE_VALUE when stage exists in portal */
+  consultationNoShowCancel: '',
 };
 
 const CLOSED_STAGES = new Set([STAGE.closedWon, STAGE.closedLost]);
