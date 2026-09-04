@@ -3,8 +3,10 @@ const log = require('../logger');
 const { resolveInPersonConsultMatrix } = require('../matrix/in-person-consult');
 const { resolveFirstSession100Matrix } = require('../matrix/first-session-100');
 const { ensureAcquisitionDeal } = require('../acquisition-deals');
+const { ensureTreatmentJourneyDeal } = require('../journey-deals');
 const { plannedDealPropertyUpdates } = require('../deal-properties');
 const { voidOrderForAppointment } = require('./orders');
+const { JOURNEY_STAGE } = require('../journey-stages');
 
 async function associateQuiet(token, fromType, fromId, toType, toId) {
   if (!fromId || !toId) return { ok: false, skipped: true };
@@ -94,6 +96,12 @@ async function applyMatrixResult(
       voidOrder: matrix.voidOrder,
       createTreatmentJourney: matrix.createTreatmentJourney,
     };
+    if (matrix.createTreatmentJourney) {
+      result.planned.treatmentJourney = {
+        pipeline: 'Treatment Journey',
+        dealStage: 'In Treatment',
+      };
+    }
     if (matrix.lifecycle === null && matrix.path === 'skipped_consult') {
       result.planned.lifecycleNote =
         'skipped_consult cancel needs Consultation No-Show/Cancel lifecycle in HubSpot';
@@ -182,14 +190,29 @@ async function applyMatrixResult(
   }
 
   if (matrix.createTreatmentJourney) {
-    result.treatmentJourney = {
-      action: 'deferred',
-      reason: 'c3_treatment_journey_handoff_not_implemented',
-    };
-    log.info('first session final: C3 Treatment Journey handoff pending', {
-      contactId,
-      dealId: dealEnsure.dealId,
+    const journeyEnsure = await ensureTreatmentJourneyDeal(config, contactId, {
+      firstName,
+      dealName: `Treatment Journey — ${firstName}`.trim(),
     });
+    result.treatmentJourney = {
+      action: journeyEnsure.action,
+      dealId: journeyEnsure.dealId,
+      dealStage: JOURNEY_STAGE.inTreatment,
+    };
+
+    if (appointmentHsId && appointmentObjectTypeId && journeyEnsure.dealId) {
+      const journeyToAppt = await associateQuiet(
+        config.hubspotToken,
+        'deals',
+        journeyEnsure.dealId,
+        appointmentObjectTypeId,
+        appointmentHsId
+      );
+      result.associations = {
+        ...(result.associations || {}),
+        journeyToAppointment: journeyToAppt,
+      };
+    }
   }
 
   if (appointmentHsId && appointmentObjectTypeId) {
@@ -200,7 +223,10 @@ async function applyMatrixResult(
       appointmentObjectTypeId,
       appointmentHsId
     );
-    result.associations = { dealToAppointment: dealToAppt };
+    result.associations = {
+      ...(result.associations || {}),
+      dealToAppointment: dealToAppt,
+    };
   }
 
   log.info('acquisition matrix applied', {
