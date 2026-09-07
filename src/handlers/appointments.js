@@ -339,6 +339,17 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
       pipeline: result.pipeline,
     });
     result.matrix = matrix;
+    try {
+      const { applyTreatmentJourneyAttach } = require('./journey-attach');
+      result.treatmentJourney = await applyTreatmentJourneyAttach(config, {
+        classification,
+        contactId: contactIdForMatrix,
+        firstName: appointment.client?.firstName || 'Contact',
+        dryRun: true,
+      });
+    } catch (err) {
+      result.treatmentJourney = { error: err.message };
+    }
     return result;
   }
 
@@ -481,6 +492,28 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
       error: err.message,
     });
     result.matrix = { error: err.message };
+  }
+
+  try {
+    const { applyTreatmentJourneyAttach } = require('./journey-attach');
+    const firstName =
+      appointment.client?.firstName ||
+      appointment.client?.first_name ||
+      'Contact';
+    result.treatmentJourney = await applyTreatmentJourneyAttach(config, {
+      classification,
+      contactId: contactIdForMatrix,
+      firstName,
+      appointmentHsId: apptUpsert.hsId,
+      appointmentObjectTypeId: apptMeta.objectTypeId,
+      dryRun: false,
+    });
+  } catch (err) {
+    log.warn('treatment journey attach failed', {
+      appointmentId: appointment.id,
+      error: err.message,
+    });
+    result.treatmentJourney = { error: err.message };
   }
 
   if (contactIdForMatrix && result.consultationType) {

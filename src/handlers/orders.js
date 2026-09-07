@@ -361,6 +361,46 @@ async function processOrderUpsert(
     associations,
   };
 
+  const contactIdForJourney = associations.contact?.contactId || null;
+  if (contactIdForJourney && appointmentId) {
+    try {
+      const appt = await blvd.getAppointment(config, appointmentId);
+      if (appt) {
+        const { classifyAppointmentServices } = require('../classify-service');
+        const classification = classifyAppointmentServices(
+          config,
+          appt.appointmentServices || []
+        );
+        const { applyTreatmentJourneyAttach } = require('./journey-attach');
+        let appointmentObjectTypeId = null;
+        const appointmentHsId =
+          associations.appointment?.appointmentHsId || null;
+        if (appointmentHsId) {
+          const apptMeta = await hs.resolveObjectTypeId(
+            config.hubspotToken,
+            config.appointmentObject
+          );
+          appointmentObjectTypeId = apptMeta.objectTypeId;
+        }
+        result.treatmentJourney = await applyTreatmentJourneyAttach(config, {
+          classification,
+          contactId: contactIdForJourney,
+          firstName: appt.client?.firstName || 'Contact',
+          orderHsId: hsOrderId,
+          orderObjectTypeId: orderMeta.objectTypeId,
+          appointmentHsId,
+          appointmentObjectTypeId,
+        });
+      }
+    } catch (err) {
+      log.warn('order treatment journey attach failed', {
+        orderId: order.id,
+        error: err.message,
+      });
+      result.treatmentJourney = { error: err.message };
+    }
+  }
+
   log.info('order upserted to HubSpot', {
     orderId: order.id,
     hsId: hsOrderId,

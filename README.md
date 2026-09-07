@@ -25,6 +25,9 @@ npm run merge:blvd-env
 | `npm run create:client -- <contactId>` | Lookup/create BLVD client for HS contact |
 | `npm run discover:services` | Fill `config/service-map.staging.json` |
 | `npm run inspect:appointment` | Classify appointment webhook (add `--apply` to write HubSpot) |
+| `npm run inspect:matrix` | Resolve Acquisition matrix for an appointment |
+| `npm run inspect:journey` | C4/C5 Treatment Journey attach dry-run (`--apply` to write) |
+| `npm run check:staging` | Staging host health |
 | `npm start` | Webhook + health server |
 
 ## Endpoints
@@ -33,7 +36,7 @@ npm run merge:blvd-env
 - `GET /health/blvd`
 - `GET /health/hubspot`
 - `GET /health/services`
-- `POST /webhooks/boulevard` (HMAC verified; appointment events upsert HubSpot Appointment + Appointment Service)
+- `POST /webhooks/boulevard` (HMAC verified; appointment events upsert HubSpot Appointment + Appointment Service; Acquisition matrices + Treatment Journey attach)
 - `POST /webhooks/hubspot` (CRM webhook; Qualified & Engaged → createClient + Acquisition Deal)
 - `POST /create-client` `{ "contactId": "..." }` (manual / dev fallback)
 - `POST /sync-contact` `{ "blvdClientId": "...", "dryRun": true }`
