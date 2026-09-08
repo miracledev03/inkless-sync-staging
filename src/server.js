@@ -160,6 +160,40 @@ async function main() {
         return sendJson(res, 200, { ok: result.errors === 0, ...result });
       }
 
+      if (req.method === 'POST' && url.pathname === '/book-consult') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const { bookConsult } = require('./handlers/book-consult');
+        try {
+          const result = await bookConsult(config, body);
+          return sendJson(res, 200, { ok: true, ...result });
+        } catch (err) {
+          const status =
+            err.code === 'MISSING_CONTACT' ||
+            err.code === 'MISSING_SERVICE' ||
+            err.code === 'SERVICE_MAP_MISSING'
+              ? 400
+              : err.code === 'SERVICE_NOT_EXTERNALLY_BOOKABLE' ||
+                  err.code === 'NO_MATCHING_TIME' ||
+                  err.code === 'NO_BOOKABLE_DATES'
+                ? 409
+                : 500;
+          return sendJson(res, status, {
+            ok: false,
+            error: err.message,
+            code: err.code || null,
+            diagnostic: err.diagnostic || null,
+            times: err.times || null,
+            dates: err.dates || null,
+          });
+        }
+      }
+
       sendJson(res, 404, { ok: false, error: 'not_found' });
     } catch (err) {
       log.error('request failed', {

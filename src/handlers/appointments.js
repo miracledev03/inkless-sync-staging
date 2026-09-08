@@ -204,7 +204,10 @@ async function associateQuiet(token, fromType, fromId, toType, toId) {
  * Parse + hydrate + classify, then upsert HubSpot Appointment + Appointment Service.
  * Pass dryRun: true to skip HubSpot writes (inspect script).
  */
-async function processAppointmentWebhook(config, { eventType, payload, headers, dryRun }) {
+async function processAppointmentWebhook(
+  config,
+  { eventType, payload, headers, dryRun, forceOrigin }
+) {
   const type = normalizeEventType(eventType);
   const appointmentId = parseAppointmentId(payload, headers);
   if (!appointmentId) {
@@ -259,7 +262,7 @@ async function processAppointmentWebhook(config, { eventType, payload, headers, 
   const existingAppt = existingSearch.results?.[0] || null;
   const origin = resolveOrigin(
     existingAppt?.properties?.[originProperty],
-    originFromWebhook()
+    forceOrigin || originFromWebhook()
   );
 
   const appointmentProperties = pickKnownProperties(

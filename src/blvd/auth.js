@@ -13,6 +13,20 @@ function generateAdminToken(businessId, apiKey, apiSecret) {
   return Buffer.from(`${apiKey}:${token}`, 'utf8').toString('base64');
 }
 
+/** Scoped Client API token (B10 cart) — clientUuid is the bare UUID, not URN. */
+function generateClientToken(businessId, clientUuid, apiKey, apiSecret) {
+  const prefix = 'blvd-client-v1';
+  const timestamp = Math.floor((Date.now() - 1000) / 1000);
+  const payload = `${prefix}${businessId}${clientUuid}${timestamp}`;
+  const rawKey = Buffer.from(apiSecret, 'base64');
+  const signature = crypto
+    .createHmac('sha256', rawKey)
+    .update(payload, 'utf8')
+    .digest('base64');
+  const token = `${signature}${payload}`;
+  return Buffer.from(`${apiKey}:${token}`, 'utf8').toString('base64');
+}
+
 function verifyWebhookSignature(rawBody, secretKey, salt, signature) {
   const rawKey = Buffer.from(secretKey, 'base64');
   const payload = `${salt}:${rawBody}`;
@@ -26,4 +40,8 @@ function verifyWebhookSignature(rawBody, secretKey, salt, signature) {
   return crypto.timingSafeEqual(a, b);
 }
 
-module.exports = { generateAdminToken, verifyWebhookSignature };
+module.exports = {
+  generateAdminToken,
+  generateClientToken,
+  verifyWebhookSignature,
+};
