@@ -298,28 +298,45 @@ async function processAppointmentWebhook(
 
   if (!write) {
     let contactIdForMatrix = null;
-    const blvdClientId = appointment.clientId || appointment.client?.id;
-    if (blvdClientId) {
-      try {
-        const contacts = await hs.searchContacts(
-          config.hubspotToken,
-          [
-            {
-              filters: [
-                {
-                  propertyName: config.blvdClientIdProperty,
-                  operator: 'EQ',
-                  value: blvdClientId,
-                },
-              ],
-            },
-          ],
-          [config.blvdClientIdProperty],
-          1
-        );
-        contactIdForMatrix = contacts.results?.[0]?.id || null;
-      } catch {
-        contactIdForMatrix = null;
+    let blvdFirst = null;
+    const role = classification.primary?.role;
+    try {
+      const { ensureBlvdFirstConsult, isConsultRole } = require('./blvd-first-consult');
+      if (isConsultRole(role)) {
+        blvdFirst = await ensureBlvdFirstConsult(config, {
+          appointment,
+          classification,
+          dryRun: true,
+        });
+        contactIdForMatrix = blvdFirst.contactId || null;
+      }
+    } catch (err) {
+      blvdFirst = { error: err.message };
+    }
+    if (!contactIdForMatrix) {
+      const blvdClientId = appointment.clientId || appointment.client?.id;
+      if (blvdClientId) {
+        try {
+          const contacts = await hs.searchContacts(
+            config.hubspotToken,
+            [
+              {
+                filters: [
+                  {
+                    propertyName: config.blvdClientIdProperty,
+                    operator: 'EQ',
+                    value: blvdClientId,
+                  },
+                ],
+              },
+            ],
+            [config.blvdClientIdProperty],
+            1
+          );
+          contactIdForMatrix = contacts.results?.[0]?.id || null;
+        } catch {
+          contactIdForMatrix = null;
+        }
       }
     }
     let matrix = null;
@@ -342,6 +359,7 @@ async function processAppointmentWebhook(
       pipeline: result.pipeline,
     });
     result.matrix = matrix;
+    result.blvdFirstConsult = blvdFirst;
     try {
       const { applyTreatmentJourneyAttach } = require('./journey-attach');
       result.treatmentJourney = await applyTreatmentJourneyAttach(config, {
@@ -402,7 +420,41 @@ async function processAppointmentWebhook(
 
   const associations = { contact: null, location: null };
   const blvdClientId = appointment.clientId || appointment.client?.id;
-  if (blvdClientId) {
+  let blvdFirst = null;
+  const role = classification.primary?.role;
+
+  // C2 — BLVD-first consult: ensure Contact (+ Deal / lifecycle / Meeting Type signal)
+  try {
+    const { ensureBlvdFirstConsult, isConsultRole } = require('./blvd-first-consult');
+    if (isConsultRole(role)) {
+      blvdFirst = await ensureBlvdFirstConsult(config, {
+        appointment,
+        classification,
+        dryRun: false,
+      });
+      result.blvdFirstConsult = blvdFirst;
+      if (blvdFirst.contactId) {
+        associations.contact = await associateQuiet(
+          config.hubspotToken,
+          apptMeta.objectTypeId,
+          apptUpsert.hsId,
+          'contacts',
+          blvdFirst.contactId
+        );
+        if (associations.contact.ok) {
+          associations.contact.contactId = blvdFirst.contactId;
+        }
+      }
+    }
+  } catch (err) {
+    log.warn('C2 BLVD-first consult failed', {
+      appointmentId: appointment.id,
+      error: err.message,
+    });
+    result.blvdFirstConsult = { error: err.message };
+  }
+
+  if (!associations.contact?.contactId && blvdClientId) {
     try {
       const contacts = await hs.searchContacts(
         config.hubspotToken,

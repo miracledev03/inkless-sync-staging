@@ -120,6 +120,18 @@ async function listClients(config, opts = {}) {
   return all;
 }
 
+async function getClient(config, id) {
+  if (!id) return null;
+  const data = await gql(
+    config,
+    `query($id: ID!) {
+      client(id: $id) { ${CLIENT_NODE} }
+    }`,
+    { id }
+  );
+  return data.client || null;
+}
+
 async function createClient(config, input) {
   const data = await gql(
     config,
@@ -273,6 +285,7 @@ module.exports = {
   listLocations,
   findClientsByEmails,
   listClients,
+  getClient,
   createClient,
   getAppointment,
   getOrder,
