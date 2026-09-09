@@ -26,6 +26,7 @@
     "smoke:book-consult": "node scripts/smoke-book-consult.js",
     "smoke:book-consult-checkout": "node scripts/smoke-book-consult-checkout.js",
     "smoke:blvd-first": "node scripts/smoke-blvd-first-consult.js",
+    "smoke:appointment-poller": "node scripts/smoke-appointment-poller.js",
     "inspect:blvd-first": "node scripts/inspect-blvd-first-consult.js",
     "webhook:register-orders": "node scripts/register-order-webhooks.js",
     "staging:enable-online-booking": "node scripts/enable-staging-online-booking.js",

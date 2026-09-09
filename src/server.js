@@ -142,6 +142,38 @@ async function main() {
         return sendJson(res, 200, { ok: true, ...result });
       }
 
+      if (req.method === 'POST' && url.pathname === '/sync-appointment') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const appointmentId =
+          body.appointmentId ||
+          body.blvdAppointmentId ||
+          body.resourceId ||
+          body.id;
+        if (!appointmentId) {
+          return sendJson(res, 400, {
+            ok: false,
+            error: 'appointmentId required',
+            hint: 'Send { "appointmentId": "urn:blvd:Appointment:..." }',
+          });
+        }
+        const eventType = body.eventType || 'APPOINTMENT_CREATED';
+        const dryRun = Boolean(body.dryRun);
+        const { processAppointmentWebhook } = require('./handlers/appointments');
+        const result = await processAppointmentWebhook(config, {
+          eventType,
+          payload: { resourceId: String(appointmentId) },
+          dryRun,
+          forceOrigin: body.forceOrigin || undefined,
+        });
+        return sendJson(res, 200, { ok: true, ...result });
+      }
+
       if (req.method === 'POST' && url.pathname === '/backfill-clients') {
         const rawBody = await readBody(req);
         let body = {};
@@ -218,6 +250,13 @@ async function main() {
       portalId: config.hubspotPortalId,
       blvdEnv: config.blvdEnv,
     });
+    try {
+      const { createAppointmentPoller } = require('./pollers/appointments');
+      const poller = createAppointmentPoller(config);
+      poller.start();
+    } catch (err) {
+      log.warn('appointment poller failed to start', { error: err.message });
+    }
   });
 }
 

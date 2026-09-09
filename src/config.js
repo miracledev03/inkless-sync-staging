@@ -61,6 +61,13 @@ function getConfig() {
         : ''),
     hubspotClientSecret: process.env.HUBSPOT_CLIENT_SECRET || '',
     hubspotWebhookSkipVerify: process.env.HUBSPOT_WEBHOOK_SKIP_VERIFY || '',
+    /** Staging escape hatch if BLVD HMAC secret drift rejects deliveries. */
+    blvdWebhookSkipVerify: process.env.BLVD_WEBHOOK_SKIP_VERIFY || '',
+    /** Poll BLVD appointments when webhooks are unreliable (sandbox default on). */
+    pollAppointments: process.env.POLL_APPOINTMENTS,
+    pollAppointmentsIntervalMs: Number(
+      process.env.POLL_APPOINTMENTS_INTERVAL_MS || 15000
+    ),
     /** Qualified & Engaged lifecycle internal value (portal 51888138). */
     qualifiedLifecycleValue:
       process.env.HUBSPOT_QUALIFIED_LIFECYCLE_VALUE || '1409285288',

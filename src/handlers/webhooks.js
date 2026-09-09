@@ -71,10 +71,18 @@ function createWebhookHandler(config) {
     }
 
     if (signatureValid === false) {
-      log.warn('webhook rejected: invalid signature');
-      res.writeHead(401, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: false, error: 'invalid_signature' }));
-      return;
+      const skip =
+        String(config.blvdWebhookSkipVerify || '').toLowerCase() === 'true' ||
+        config.blvdWebhookSkipVerify === '1';
+      if (skip) {
+        log.warn('webhook signature invalid but BLVD_WEBHOOK_SKIP_VERIFY set — accepting');
+        signatureValid = false;
+      } else {
+        log.warn('webhook rejected: invalid signature');
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'invalid_signature' }));
+        return;
+      }
     }
 
     const eventType =

@@ -175,6 +175,34 @@ const APPOINTMENT_NODE = `
   }
 `;
 
+async function listRecentAppointments(config, { locationId, first = 40 } = {}) {
+  if (!locationId) {
+    const locs = await listLocations(config, 1);
+    locationId = locs[0]?.id;
+  }
+  if (!locationId) return [];
+  const data = await gql(
+    config,
+    `query($locationId: ID!, $first: Int!) {
+      appointments(locationId: $locationId, first: $first) {
+        edges {
+          node {
+            id
+            startAt
+            endAt
+            state
+            cancelled
+            clientId
+            locationId
+          }
+        }
+      }
+    }`,
+    { locationId, first }
+  );
+  return (data.appointments?.edges || []).map((e) => e.node).filter(Boolean);
+}
+
 async function getAppointment(config, id) {
   if (!id) return null;
   const data = await gql(
@@ -288,6 +316,7 @@ module.exports = {
   getClient,
   createClient,
   getAppointment,
+  listRecentAppointments,
   getOrder,
   findAppointmentByOrderId,
   listServices,
