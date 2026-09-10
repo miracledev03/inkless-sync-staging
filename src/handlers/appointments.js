@@ -102,6 +102,8 @@ function plannedAppointmentProperties(appointment, classification, origin) {
     blvd_appointment_id: appointment.id,
     blvd_appointment_source: origin,
     last_synced_at: String(Date.now()),
+    sync_status: 'ok',
+    sync_error: '',
   };
   const status = mapStatus(appointment.state);
   if (status) props.blvd_appointment_status = status;
@@ -145,9 +147,11 @@ function plannedServiceProperties(svc, extra) {
 
 function pickKnownProperties(props, schemaNames) {
   const allowed = new Set((schemaNames || []).map((n) => String(n)));
+  const allowEmpty = new Set(['sync_error']);
   const out = {};
   for (const [k, v] of Object.entries(props || {})) {
-    if (v === undefined || v === null || v === '') continue;
+    if (v === undefined || v === null) continue;
+    if (v === '' && !allowEmpty.has(k)) continue;
     if (allowed.has(k)) out[k] = v;
   }
   return out;
@@ -617,11 +621,64 @@ async function processAppointmentWebhook(
   return result;
 }
 
+/**
+ * Best-effort write of sync_status=error onto an existing HS appointment.
+ */
+async function markAppointmentSyncError(config, appointmentId, errorMessage) {
+  if (!appointmentId) return null;
+  try {
+    const apptMeta = await hs.resolveObjectTypeId(
+      config.hubspotToken,
+      config.appointmentObject
+    );
+    const apptIdProperty =
+      config.appointmentIdProperty || 'blvd_appointment_id';
+    if (
+      !(apptMeta.properties || []).includes('sync_status') &&
+      !(apptMeta.properties || []).includes('sync_error')
+    ) {
+      return null;
+    }
+    const found = await hs.searchByProperty(
+      config.hubspotToken,
+      apptMeta.objectTypeId,
+      apptIdProperty,
+      appointmentId,
+      [apptIdProperty]
+    );
+    const hit = found.results?.[0];
+    if (!hit) return null;
+    const props = pickKnownProperties(
+      {
+        sync_status: 'error',
+        sync_error: String(errorMessage || 'sync_failed').slice(0, 1000),
+        last_synced_at: String(Date.now()),
+      },
+      apptMeta.properties
+    );
+    if (!Object.keys(props).length) return null;
+    await hs.updateObject(
+      config.hubspotToken,
+      apptMeta.objectTypeId,
+      hit.id,
+      props
+    );
+    return { hsId: hit.id, props };
+  } catch (err) {
+    log.warn('markAppointmentSyncError failed', {
+      appointmentId,
+      error: err.message,
+    });
+    return null;
+  }
+}
+
 module.exports = {
   APPOINTMENT_EVENTS,
   isAppointmentEvent,
   parseAppointmentId,
   processAppointmentWebhook,
+  markAppointmentSyncError,
   mapStatus,
   mapOutcome,
 };

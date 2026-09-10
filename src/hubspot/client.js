@@ -1,4 +1,6 @@
-async function hsRequest(token, method, urlPath, body) {
+const { withRetry } = require('../retry');
+
+async function hsRequestOnce(token, method, urlPath, body) {
   const res = await fetch(`https://api.hubapi.com${urlPath}`, {
     method,
     headers: {
@@ -21,6 +23,10 @@ async function hsRequest(token, method, urlPath, body) {
     throw err;
   }
   return parsed;
+}
+
+async function hsRequest(token, method, urlPath, body) {
+  return withRetry(() => hsRequestOnce(token, method, urlPath, body));
 }
 
 async function listSchemas(token) {
@@ -50,10 +56,26 @@ async function resolveObjectTypeId(token, preferredName) {
         .join(', ')}`
     );
   }
+  const objectTypeId =
+    match.objectTypeId || match.fullyQualifiedName || match.name;
+  let properties = (match.properties || []).map((p) => p.name);
+  try {
+    const listed = await hsRequest(
+      token,
+      'GET',
+      `/crm/v3/properties/${objectTypeId}`
+    );
+    const fromApi = (listed.results || []).map((p) => p.name);
+    if (fromApi.length) {
+      properties = [...new Set([...properties, ...fromApi])];
+    }
+  } catch {
+    // keep schema properties
+  }
   return {
-    objectTypeId: match.objectTypeId || match.fullyQualifiedName || match.name,
+    objectTypeId,
     name: match.name,
-    properties: (match.properties || []).map((p) => p.name),
+    properties,
   };
 }
 

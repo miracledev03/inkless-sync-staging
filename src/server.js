@@ -20,6 +20,8 @@ async function main() {
   const config = getConfig();
   const handleWebhook = createWebhookHandler(config);
   const handleHubSpotWebhook = createHubSpotWebhookHandler(config);
+  let appointmentPoller = null;
+  const idempotency = require('./idempotency');
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -30,6 +32,10 @@ async function main() {
           ok: true,
           portalId: config.hubspotPortalId,
           blvdEnv: config.blvdEnv,
+          poller: appointmentPoller?.getStatus
+            ? appointmentPoller.getStatus()
+            : { enabled: false },
+          idempotency: idempotency.stats(),
         });
       }
 
@@ -253,7 +259,7 @@ async function main() {
     try {
       const { createAppointmentPoller } = require('./pollers/appointments');
       const poller = createAppointmentPoller(config);
-      poller.start();
+      appointmentPoller = poller.start();
     } catch (err) {
       log.warn('appointment poller failed to start', { error: err.message });
     }

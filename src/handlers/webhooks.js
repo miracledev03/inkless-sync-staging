@@ -110,7 +110,12 @@ function createWebhookHandler(config) {
     }
 
     let appointment = null;
-    const { isAppointmentEvent, processAppointmentWebhook } = require('./appointments');
+    const {
+      isAppointmentEvent,
+      processAppointmentWebhook,
+      parseAppointmentId,
+      markAppointmentSyncError,
+    } = require('./appointments');
     if (isAppointmentEvent(eventType)) {
       try {
         appointment = await processAppointmentWebhook(config, {
@@ -124,6 +129,8 @@ function createWebhookHandler(config) {
           error: err.message,
         });
         appointment = { action: 'error', write: false, error: err.message };
+        const appointmentId = parseAppointmentId(payload, headers);
+        await markAppointmentSyncError(config, appointmentId, err.message);
       }
     }
 

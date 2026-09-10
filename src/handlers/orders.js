@@ -98,6 +98,8 @@ function plannedOrderProperties(order, { appointmentId, eventType }) {
     blvd_client_id: order.clientId || undefined,
     blvd_appointment_id: appointmentId || 'none',
     last_synced_at: String(Date.now()),
+    sync_status: 'ok',
+    sync_error: '',
   };
 
   const subtotal = moneyToDollars(order.summary?.currentSubtotal);
@@ -122,9 +124,11 @@ function plannedOrderProperties(order, { appointmentId, eventType }) {
 
 function pickKnownProperties(props, schemaNames) {
   const allowed = new Set((schemaNames || []).map((n) => String(n)));
+  const allowEmpty = new Set(['sync_error']);
   const out = {};
   for (const [k, v] of Object.entries(props || {})) {
-    if (v === undefined || v === null || v === '') continue;
+    if (v === undefined || v === null) continue;
+    if (v === '' && !allowEmpty.has(k)) continue;
     if (allowed.has(k)) out[k] = v;
   }
   return out;
@@ -446,6 +450,8 @@ async function voidOrderForAppointment(config, { orderId, appointmentId }) {
     blvd_order_status: 'Refunded',
     blvd_appointment_id: appointmentId || hit.properties?.blvd_appointment_id,
     last_synced_at: String(Date.now()),
+    sync_status: 'ok',
+    sync_error: '',
   });
 
   log.info('order voided on hubspot (appointment cancel)', {

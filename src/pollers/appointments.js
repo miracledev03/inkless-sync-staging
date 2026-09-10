@@ -39,6 +39,15 @@ function createAppointmentPoller(config, opts = {}) {
   let timer = null;
   let running = false;
   let apptMeta = null;
+  const status = {
+    enabled,
+    intervalMs,
+    startedAt: null,
+    lastTickAt: null,
+    lastSynced: 0,
+    lastError: null,
+    ticks: 0,
+  };
 
   async function alreadyCurrentInHubSpot(appt) {
     try {
@@ -129,7 +138,13 @@ function createAppointmentPoller(config, opts = {}) {
         const keys = [...seen.keys()].slice(0, seen.size - 400);
         for (const k of keys) seen.delete(k);
       }
+      status.lastTickAt = new Date().toISOString();
+      status.lastSynced = synced;
+      status.lastError = null;
+      status.ticks += 1;
     } catch (err) {
+      status.lastTickAt = new Date().toISOString();
+      status.lastError = err.message;
       log.warn('appointment poll tick failed', { error: err.message });
     } finally {
       running = false;
@@ -139,9 +154,10 @@ function createAppointmentPoller(config, opts = {}) {
   function start() {
     if (!enabled) {
       log.info('appointment poller disabled');
-      return { enabled: false, stop() {} };
+      return { enabled: false, stop() {}, getStatus: () => ({ ...status }) };
     }
     log.info('appointment poller starting', { intervalMs });
+    status.startedAt = new Date().toISOString();
     tick().catch(() => {});
     timer = setInterval(() => {
       tick().catch(() => {});
@@ -155,10 +171,11 @@ function createAppointmentPoller(config, opts = {}) {
         timer = null;
       },
       tick,
+      getStatus: () => ({ ...status, running }),
     };
   }
 
-  return { start, tick, enabled, intervalMs };
+  return { start, tick, enabled, intervalMs, getStatus: () => ({ ...status }) };
 }
 
 module.exports = { createAppointmentPoller, fingerprint };
