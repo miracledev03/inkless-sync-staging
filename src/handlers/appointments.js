@@ -96,6 +96,48 @@ function staffName(staff) {
   );
 }
 
+function formatApptDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+}
+
+function clientDisplayName(appointment) {
+  const c = appointment.client || {};
+  const name = [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
+  if (name) return name;
+  if (c.email) return c.email;
+  return null;
+}
+
+function buildAppointmentLabel(appointment, classification) {
+  const parts = [];
+  const clientName = clientDisplayName(appointment);
+  if (clientName) parts.push(clientName);
+  const service =
+    classification?.primary?.serviceName ||
+    classification?.primary?.consultationType ||
+    null;
+  if (service) parts.push(service);
+  const when = formatApptDate(appointment.startAt);
+  if (when) parts.push(when);
+  const status = appointment.cancelled
+    ? 'Cancelled'
+    : mapStatus(appointment.state);
+  if (status) parts.push(status);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 function plannedAppointmentProperties(appointment, classification, origin) {
   const primary = classification.primary;
   const props = {
@@ -105,6 +147,8 @@ function plannedAppointmentProperties(appointment, classification, origin) {
     sync_status: 'ok',
     sync_error: '',
   };
+  const label = buildAppointmentLabel(appointment, classification);
+  if (label) props.blvd_appointment_label = label;
   const status = mapStatus(appointment.state);
   if (status) props.blvd_appointment_status = status;
   const outcome = mapOutcome(appointment);
@@ -119,6 +163,7 @@ function plannedAppointmentProperties(appointment, classification, origin) {
   if (primary?.serviceName) {
     props.blvd_appointment_service_name = primary.serviceName;
   }
+  // Required HS property; primary display is blvd_appointment_label (not this field).
   props.blvd_appointment_order_id = appointment.orderId || 'none';
   if (appointment.clientId || appointment.client?.id) {
     props.blvd_client_id = appointment.clientId || appointment.client.id;

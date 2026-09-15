@@ -21,6 +21,7 @@ async function main() {
   const handleWebhook = createWebhookHandler(config);
   const handleHubSpotWebhook = createHubSpotWebhookHandler(config);
   let appointmentPoller = null;
+  let clientPoller = null;
   const idempotency = require('./idempotency');
 
   const server = http.createServer(async (req, res) => {
@@ -34,6 +35,9 @@ async function main() {
           blvdEnv: config.blvdEnv,
           poller: appointmentPoller?.getStatus
             ? appointmentPoller.getStatus()
+            : { enabled: false },
+          clientPoller: clientPoller?.getStatus
+            ? clientPoller.getStatus()
             : { enabled: false },
           idempotency: idempotency.stats(),
         });
@@ -262,6 +266,13 @@ async function main() {
       appointmentPoller = poller.start();
     } catch (err) {
       log.warn('appointment poller failed to start', { error: err.message });
+    }
+    try {
+      const { createClientPoller } = require('./pollers/clients');
+      const poller = createClientPoller(config);
+      clientPoller = poller.start();
+    } catch (err) {
+      log.warn('client poller failed to start', { error: err.message });
     }
   });
 }

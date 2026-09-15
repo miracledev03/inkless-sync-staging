@@ -460,10 +460,105 @@ async function processQualifyPath(config, contactId) {
   return { blvd, acquisitionDeal: deal };
 }
 
+const CLIENT_EVENTS = new Set([
+  'CLIENT_CREATED',
+  'CLIENT_UPDATED',
+  'CLIENT_MERGED',
+]);
+
+function isClientEvent(eventType) {
+  const t = String(eventType || '')
+    .replace(/[.\s]/g, '_')
+    .toUpperCase();
+  return CLIENT_EVENTS.has(t) || t.startsWith('CLIENT_');
+}
+
+function normalizeClientEventType(eventType) {
+  return String(eventType || 'UNKNOWN')
+    .replace(/[.\s]/g, '_')
+    .toUpperCase();
+}
+
+function parseClientId(payload, headers = {}) {
+  const candidates = [
+    payload?.resourceId,
+    payload?.resource_id,
+    payload?.clientId,
+    payload?.client_id,
+    payload?.data?.id,
+    payload?.data?.clientId,
+    payload?.data?.client?.id,
+    payload?.client?.id,
+    payload?.primaryClientId,
+    payload?.survivingClientId,
+    payload?.data?.primaryClientId,
+    payload?.data?.survivingClientId,
+    headers['x-blvd-resource-id'],
+  ];
+  for (const c of candidates) {
+    if (c && String(c).includes('Client')) return String(c);
+  }
+  if (payload?.id && String(payload.id).includes('Client')) {
+    return String(payload.id);
+  }
+  return null;
+}
+
+/**
+ * A5 continuous — CLIENT_* webhook → HubSpot Contact upsert (Test B).
+ */
+async function processClientWebhook(
+  config,
+  { eventType, payload, headers, dryRun }
+) {
+  const type = normalizeClientEventType(eventType);
+  const clientId = parseClientId(payload, headers);
+  if (!clientId) {
+    log.warn('client webhook missing id', { eventType: type });
+    return {
+      action: 'skipped',
+      reason: 'missing_client_id',
+      eventType: type,
+      write: false,
+    };
+  }
+
+  const client = await blvd.getClient(config, clientId);
+  if (!client) {
+    log.warn('client not found in BLVD', { clientId, eventType: type });
+    return {
+      action: 'skipped',
+      reason: 'client_not_found',
+      clientId,
+      eventType: type,
+      write: false,
+    };
+  }
+
+  if (type === 'CLIENT_MERGED') {
+    log.info('CLIENT_MERGED — upserting surviving client', {
+      clientId,
+      payloadKeys: Object.keys(payload || {}),
+    });
+  }
+
+  const result = await upsertContactFromBlvdClient(config, client, { dryRun });
+  return {
+    ...result,
+    eventType: type,
+    write: dryRun !== true,
+    clientId,
+  };
+}
+
 module.exports = {
   ensureBlvdClientForContact,
   processQualifyPath,
   upsertContactFromBlvdClient,
   backfillBlvdClients,
   mapBlvdClientToContactProps,
+  CLIENT_EVENTS,
+  isClientEvent,
+  parseClientId,
+  processClientWebhook,
 };

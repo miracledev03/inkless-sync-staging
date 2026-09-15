@@ -70,13 +70,23 @@ function sumPayments(order) {
 }
 
 function primaryLineLabel(order) {
+  const parts = [];
+  if (order.number) parts.push(`#${order.number}`);
+  let lineName = null;
   for (const group of order.lineGroups || []) {
     for (const line of group.lines || []) {
-      if (line?.name) return line.name;
+      if (line?.name) {
+        lineName = line.name;
+        break;
+      }
     }
+    if (lineName) break;
   }
-  if (order.number) return `Order ${order.number}`;
-  return 'Boulevard Order';
+  if (lineName) parts.push(lineName);
+  else if (!order.number) parts.push('Boulevard Order');
+  const status = mapOrderStatus(order, null);
+  if (status) parts.push(status);
+  return parts.join(' · ');
 }
 
 function mapOrderStatus(order, eventType) {

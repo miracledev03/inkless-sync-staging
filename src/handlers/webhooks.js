@@ -152,8 +152,32 @@ function createWebhookHandler(config) {
       }
     }
 
+    let client = null;
+    const { isClientEvent, processClientWebhook } = require('./clients');
+    if (isClientEvent(eventType)) {
+      try {
+        client = await processClientWebhook(config, {
+          eventType,
+          payload,
+          headers,
+        });
+      } catch (err) {
+        log.error('client webhook failed', {
+          eventType,
+          error: err.message,
+          code: err.code,
+        });
+        client = {
+          action: 'error',
+          write: false,
+          error: err.message,
+          code: err.code || null,
+        };
+      }
+    }
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, appointment, order }));
+    res.end(JSON.stringify({ ok: true, appointment, order, client }));
   };
 }
 

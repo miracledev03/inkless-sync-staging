@@ -68,6 +68,11 @@ function getConfig() {
     pollAppointmentsIntervalMs: Number(
       process.env.POLL_APPOINTMENTS_INTERVAL_MS || 15000
     ),
+    /** Poll BLVD clients for Test B when CLIENT_* webhooks are quiet (sandbox default on). */
+    pollClients: process.env.POLL_CLIENTS,
+    pollClientsIntervalMs: Number(
+      process.env.POLL_CLIENTS_INTERVAL_MS || 60000
+    ),
     /** Qualified & Engaged lifecycle internal value (portal 51888138). */
     qualifiedLifecycleValue:
       process.env.HUBSPOT_QUALIFIED_LIFECYCLE_VALUE || '1409285288',
