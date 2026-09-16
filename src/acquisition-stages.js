@@ -16,9 +16,9 @@ const LIFECYCLE = {
   consultationBooked: '1409274217',
   consultationAttended: '1409285289',
   qualifiedEngaged: '1409285288',
+  /** Skipped-consult First Session cancel/no-show (portal 51888138). */
+  consultationNoShowCancel: '1438902888',
   activeCustomer: 'customer',
-  /** Set via HUBSPOT_CONSULTATION_NOSHOW_LIFECYCLE_VALUE when stage exists in portal */
-  consultationNoShowCancel: '',
 };
 
 const CLOSED_STAGES = new Set([STAGE.closedWon, STAGE.closedLost]);

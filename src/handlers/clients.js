@@ -70,6 +70,9 @@ async function findContactForBlvdClient(config, client) {
       `Ambiguous HS contact match for BLVD Client ID ${client.id}`
     );
     err.code = 'INTEGRATION_REVIEW';
+    err.contactIds = byId.results.map((r) => String(r.id));
+    err.blvdClientId = client.id;
+    err.email = client.email || null;
     throw err;
   }
 
@@ -98,6 +101,9 @@ async function findContactForBlvdClient(config, client) {
         `Ambiguous HS contact match for email ${client.email}`
       );
       err.code = 'INTEGRATION_REVIEW';
+      err.contactIds = byEmail.results.map((r) => String(r.id));
+      err.blvdClientId = client.id;
+      err.email = client.email;
       throw err;
     }
   }
@@ -143,9 +149,26 @@ async function withRetry(fn, { tries = 3, delayMs = 400 } = {}) {
 async function upsertContactFromBlvdClient(config, client, opts = {}) {
   const dryRun = Boolean(opts.dryRun);
   const props = mapBlvdClientToContactProps(client, config.blvdClientIdProperty);
-  const { contact, match } = await withRetry(() =>
-    findContactForBlvdClient(config, client)
-  );
+  let contact;
+  let match;
+  try {
+    ({ contact, match } = await withRetry(() =>
+      findContactForBlvdClient(config, client)
+    ));
+  } catch (err) {
+    if (err.code === 'INTEGRATION_REVIEW') {
+      const review = require('../integration-review');
+      await review.record(config, {
+        code: err.code,
+        message: err.message,
+        blvdClientId: err.blvdClientId || client.id,
+        email: err.email || client.email || null,
+        contactIds: err.contactIds || [],
+        context: 'upsertContactFromBlvdClient',
+      });
+    }
+    throw err;
+  }
   const currentLifecycle = contact?.properties?.lifecyclestage || null;
 
   if (contact) {
@@ -397,6 +420,17 @@ async function ensureBlvdClientForContact(config, contactId) {
         `Ambiguous BLVD client match for email ${email} (${matches.length} hits)`
       );
       err.code = 'INTEGRATION_REVIEW';
+      err.contactIds = [String(contactId)];
+      err.email = email;
+      err.blvdClientId = null;
+      const review = require('../integration-review');
+      await review.record(config, {
+        code: err.code,
+        message: err.message,
+        email,
+        contactIds: [String(contactId)],
+        context: 'ensureBlvdClientForContact',
+      });
       throw err;
     }
   }

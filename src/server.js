@@ -29,6 +29,7 @@ async function main() {
 
     try {
       if (req.method === 'GET' && url.pathname === '/health') {
+        const review = require('./integration-review');
         return sendJson(res, 200, {
           ok: true,
           portalId: config.hubspotPortalId,
@@ -40,6 +41,20 @@ async function main() {
             ? clientPoller.getStatus()
             : { enabled: false },
           idempotency: idempotency.stats(),
+          integrationReview: {
+            memoryCount: review.stats().memoryCount,
+            diskEnabled: review.stats().diskEnabled,
+          },
+        });
+      }
+
+      if (req.method === 'GET' && url.pathname === '/integration-review') {
+        const review = require('./integration-review');
+        const limit = Number(url.searchParams.get('limit') || 50);
+        return sendJson(res, 200, {
+          ok: true,
+          items: review.list(limit),
+          stats: review.stats(),
         });
       }
 

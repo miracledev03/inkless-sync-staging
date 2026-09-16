@@ -76,9 +76,9 @@ function getConfig() {
     /** Qualified & Engaged lifecycle internal value (portal 51888138). */
     qualifiedLifecycleValue:
       process.env.HUBSPOT_QUALIFIED_LIFECYCLE_VALUE || '1409285288',
-    /** Skipped-consult cancel lifecycle (create in HubSpot if missing). */
+    /** Skipped-consult cancel lifecycle (sandbox default; override via env if needed). */
     consultationNoShowCancelLifecycle:
-      process.env.HUBSPOT_CONSULTATION_NOSHOW_LIFECYCLE_VALUE || '',
+      process.env.HUBSPOT_CONSULTATION_NOSHOW_LIFECYCLE_VALUE || '1438902888',
     serviceMapPath:
       process.env.SERVICE_MAP_PATH || './config/service-map.staging.json',
     languageProperty: process.env.HUBSPOT_LANGUAGE_PROPERTY || 'language',
