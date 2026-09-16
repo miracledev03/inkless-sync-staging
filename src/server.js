@@ -124,6 +124,29 @@ async function main() {
         return sendJson(res, 200, { ok: true, ...result });
       }
 
+      if (req.method === 'POST' && url.pathname === '/refresh-deal-amounts') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const contactId = body.contactId || body.id;
+        if (!contactId) {
+          return sendJson(res, 400, {
+            ok: false,
+            error: 'contactId required',
+          });
+        }
+        const { refreshDealAmounts } = require('./deal-amounts');
+        const result = await refreshDealAmounts(config, {
+          contactId: String(contactId),
+          dryRun: Boolean(body.dryRun),
+        });
+        return sendJson(res, 200, { ok: true, ...result });
+      }
+
       if (req.method === 'POST' && url.pathname === '/sync-contact') {
         const rawBody = await readBody(req);
         let body = {};

@@ -415,6 +415,21 @@ async function processOrderUpsert(
     }
   }
 
+  if (associations.contact?.contactId) {
+    try {
+      const { refreshDealAmounts } = require('../deal-amounts');
+      result.dealAmounts = await refreshDealAmounts(config, {
+        contactId: associations.contact.contactId,
+      });
+    } catch (err) {
+      log.warn('deal amount refresh failed', {
+        orderId: order.id,
+        error: err.message,
+      });
+      result.dealAmounts = { error: err.message };
+    }
+  }
+
   log.info('order upserted to HubSpot', {
     orderId: order.id,
     hsId: hsOrderId,

@@ -32,6 +32,7 @@
     "webhook:register-orders": "node scripts/register-order-webhooks.js",
     "webhook:register-clients": "node scripts/register-client-webhooks.js",
     "smoke:client-webhook": "node scripts/smoke-client-webhook.js",
+    "smoke:deal-amounts": "node scripts/smoke-deal-amounts.js",
     "staging:set-primary-display": "node scripts/set-primary-display-properties.js",
     "staging:enable-online-booking": "node scripts/enable-staging-online-booking.js",
     "staging:enable-staff-shifts": "node scripts/enable-staging-staff-shifts.js",

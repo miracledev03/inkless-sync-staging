@@ -38,6 +38,8 @@ async function listContactDeals(token, contactId, langProp = 'language') {
     'dealstage',
     'pipeline',
     'consultation_type',
+    'amount',
+    'hs_lastmodifieddate',
     langProp,
   ];
   const assoc = await hs.hsRequest(

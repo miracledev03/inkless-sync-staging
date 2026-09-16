@@ -215,6 +215,17 @@ async function applyMatrixResult(
     }
   }
 
+  try {
+    const { refreshDealAmounts } = require('../deal-amounts');
+    result.dealAmounts = await refreshDealAmounts(config, { contactId });
+  } catch (err) {
+    log.warn('deal amount refresh after matrix failed', {
+      contactId,
+      error: err.message,
+    });
+    result.dealAmounts = { error: err.message };
+  }
+
   if (appointmentHsId && appointmentObjectTypeId) {
     const dealToAppt = await associateQuiet(
       config.hubspotToken,
