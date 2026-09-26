@@ -144,7 +144,7 @@ async function withRetry(fn, { tries = 3, delayMs = 400 } = {}) {
 
 /**
  * A5 — BLVD client → HubSpot Contact upsert (ID, name, email, phone, DOB).
- * Does not set Imported - BLVD (that is A6 backfill only).
+ * Does not set BLVD Pre-Cutover Client or Lead (that is A6 backfill only).
  */
 async function upsertContactFromBlvdClient(config, client, opts = {}) {
   const dryRun = Boolean(opts.dryRun);
@@ -232,41 +232,55 @@ async function upsertContactFromBlvdClient(config, client, opts = {}) {
   };
 }
 
-async function resolveImportedLifecycleValue(config) {
-  if (config.importedBlvdLifecycleValue) {
-    return config.importedBlvdLifecycleValue;
-  }
-  return hs.ensureImportedBlvdLifecycleStage(
-    config.hubspotToken,
-    config.importedBlvdLifecycleLabel
-  );
+/**
+ * Whether A6 may overwrite lifecyclestage (Dan: set Lead on eligible contacts).
+ * Never overwrite Qualified / consult / customer stages — and never write
+ * Qualified & Engaged (would mass-fire createClient).
+ */
+function shouldSetBackfillLifecycle(existingLifecycle, leadValue) {
+  if (!existingLifecycle) return true;
+  if (existingLifecycle === leadValue) return false;
+  if (PROTECTED_LIFECYCLES.has(existingLifecycle)) return false;
+  return true;
 }
 
-function shouldSetImportedLifecycle(existingLifecycle, importedValue) {
-  if (!existingLifecycle) return true;
-  if (existingLifecycle === importedValue) return false;
-  if (PROTECTED_LIFECYCLES.has(existingLifecycle)) return false;
-  // lead / unknown early stages OK to set
-  return true;
+function backfillLifecycleSkipReason(existingLifecycle, leadValue) {
+  if (!existingLifecycle) return null;
+  if (existingLifecycle === leadValue) return 'already_lead';
+  if (PROTECTED_LIFECYCLES.has(existingLifecycle)) {
+    return 'skip_protected_lifecycle';
+  }
+  return null;
 }
 
 /**
  * A6 — Client-only historical backfill.
- * Default dryRun=true. Sets Lifecycle to Imported - BLVD on create / eligible updates.
+ * Default dryRun=true.
+ * Sets BLVD Pre-Cutover Client = true and Lifecycle = Lead (Dan/Joey Sep 22)
+ * on create / eligible updates. Does not set Qualified & Engaged.
  */
 async function backfillBlvdClients(config, opts = {}) {
   const dryRun = opts.dryRun !== false;
   const limit =
     opts.limit != null && Number(opts.limit) > 0 ? Number(opts.limit) : null;
 
-  const importedValue = await resolveImportedLifecycleValue(config);
+  const flagProp = config.blvdPreCutoverClientProperty;
+  const leadValue = config.backfillLifecycleValue || 'lead';
+
+  if (!dryRun) {
+    await hs.ensureBlvdPreCutoverClientProperty(
+      config.hubspotToken,
+      flagProp
+    );
+  }
+
   let clients = await blvd.listClients(config);
   if (limit) clients = clients.slice(0, limit);
 
   const summary = {
     dryRun,
-    importedLifecycleLabel: config.importedBlvdLifecycleLabel,
-    importedLifecycleValue: importedValue,
+    preCutoverProperty: flagProp,
+    backfillLifecycleValue: leadValue,
     totalClients: clients.length,
     would_create: 0,
     would_update: 0,
@@ -285,48 +299,64 @@ async function backfillBlvdClients(config, opts = {}) {
       });
 
       let lifecycleAction = 'none';
+      let flagAction = 'none';
       let contactId = base.contactId;
+      const setLifecycle = shouldSetBackfillLifecycle(
+        base.currentLifecycle,
+        leadValue
+      );
+      const skipReason = backfillLifecycleSkipReason(
+        base.currentLifecycle,
+        leadValue
+      );
 
       if (dryRun && base.action === 'would_create') {
-        lifecycleAction = 'would_set_imported_blvd';
         summary.would_create += 1;
+        flagAction = 'would_set_pre_cutover';
+        lifecycleAction = 'would_set_lead';
       } else if (dryRun && base.action === 'would_update') {
         summary.would_update += 1;
-        if (
-          shouldSetImportedLifecycle(base.currentLifecycle, importedValue)
-        ) {
-          lifecycleAction = 'would_set_imported_blvd';
+        flagAction = 'would_set_pre_cutover';
+        if (setLifecycle) {
+          lifecycleAction = 'would_set_lead';
         } else {
-          lifecycleAction = 'skip_protected_lifecycle';
-          summary.skipped_lifecycle += 1;
+          lifecycleAction = skipReason || 'skip_lifecycle';
+          if (skipReason === 'skip_protected_lifecycle') {
+            summary.skipped_lifecycle += 1;
+          }
         }
       } else if (!dryRun && base.action === 'create') {
         summary.create += 1;
+        const props = {
+          [flagProp]: 'true',
+          lifecyclestage: leadValue,
+        };
         await withRetry(() =>
-          hs.updateContact(config.hubspotToken, contactId, {
-            lifecyclestage: importedValue,
-          })
+          hs.updateContact(config.hubspotToken, contactId, props)
         );
-        lifecycleAction = 'set_imported_blvd';
+        flagAction = 'set_pre_cutover';
+        lifecycleAction = 'set_lead';
       } else if (!dryRun && base.action === 'update') {
         summary.update += 1;
-        if (
-          shouldSetImportedLifecycle(base.currentLifecycle, importedValue)
-        ) {
-          await withRetry(() =>
-            hs.updateContact(config.hubspotToken, contactId, {
-              lifecyclestage: importedValue,
-            })
-          );
-          lifecycleAction = 'set_imported_blvd';
+        const props = { [flagProp]: 'true' };
+        if (setLifecycle) {
+          props.lifecyclestage = leadValue;
+          lifecycleAction = 'set_lead';
         } else {
-          lifecycleAction = 'skip_protected_lifecycle';
-          summary.skipped_lifecycle += 1;
+          lifecycleAction = skipReason || 'skip_lifecycle';
+          if (skipReason === 'skip_protected_lifecycle') {
+            summary.skipped_lifecycle += 1;
+          }
         }
+        await withRetry(() =>
+          hs.updateContact(config.hubspotToken, contactId, props)
+        );
+        flagAction = 'set_pre_cutover';
       }
 
       summary.results.push({
         ...base,
+        flagAction,
         lifecycleAction,
       });
       // Soft throttle HubSpot search/update bursts in sandbox.

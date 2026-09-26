@@ -88,13 +88,23 @@ function getConfig() {
     locationBlvdIdProperty:
       process.env.HUBSPOT_LOCATION_BLVD_ID_PROPERTY ||
       'location_external_id',
-    /** Lifecycle label for A6 historical backfill (Joey). */
+    /**
+     * Durable pre-cutover marker (Dan/Joey Sep 22). Boolean Yes/No.
+     * Set on A6 backfill; never cleared when lifecycle advances.
+     */
+    blvdPreCutoverClientProperty:
+      process.env.HUBSPOT_BLVD_PRE_CUTOVER_CLIENT_PROPERTY ||
+      'blvd_pre_cutover_client',
+    /**
+     * Lifecycle written on A6 backfill for new / eligible Contacts.
+     * Dan approved: Lead (not Imported - BLVD). Standard HubSpot value: lead.
+     */
+    backfillLifecycleValue:
+      process.env.HUBSPOT_BACKFILL_LIFECYCLE_VALUE || 'lead',
+    /** @deprecated Prefer blvdPreCutoverClientProperty; kept for docs/migration. */
     importedBlvdLifecycleLabel:
       process.env.HUBSPOT_IMPORTED_BLVD_LIFECYCLE_LABEL || 'Imported - BLVD',
-    /**
-     * Optional hard-coded lifecyclestage value. When empty, resolved/created
-     * via ensureImportedBlvdLifecycleStage (sandbox: 1422909443).
-     */
+    /** @deprecated A6 no longer sets Imported - BLVD. */
     importedBlvdLifecycleValue:
       process.env.HUBSPOT_IMPORTED_BLVD_LIFECYCLE_VALUE || '',
     appointmentObject:

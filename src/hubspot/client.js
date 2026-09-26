@@ -150,6 +150,7 @@ async function searchContacts(token, filterGroups, properties = [], limit = 5) {
 /**
  * Ensure "Imported - BLVD" exists on the contact lifecycle pipeline.
  * Returns the lifecyclestage option value (stage id).
+ * @deprecated A6 backfill now uses Lead + blvd_pre_cutover_client.
  */
 async function ensureImportedBlvdLifecycleStage(
   token,
@@ -178,6 +179,37 @@ async function ensureImportedBlvdLifecycleStage(
   return created.id;
 }
 
+/**
+ * Ensure Contact boolean BLVD Pre-Cutover Client exists.
+ * Returns the property name.
+ */
+async function ensureBlvdPreCutoverClientProperty(
+  token,
+  name = 'blvd_pre_cutover_client'
+) {
+  try {
+    await hsRequest(token, 'GET', `/crm/v3/properties/contacts/${name}`);
+    return name;
+  } catch (err) {
+    if (err.status !== 404) throw err;
+  }
+
+  await hsRequest(token, 'POST', '/crm/v3/properties/contacts', {
+    name,
+    label: 'BLVD Pre-Cutover Client',
+    type: 'bool',
+    fieldType: 'booleancheckbox',
+    groupName: 'contactinformation',
+    description:
+      'Contact existed in Boulevard before HubSpot sync cutover. Durable history flag — do not clear when Lifecycle advances.',
+    options: [
+      { label: 'Yes', value: 'true', displayOrder: 0, hidden: false },
+      { label: 'No', value: 'false', displayOrder: 1, hidden: false },
+    ],
+  });
+  return name;
+}
+
 module.exports = {
   hsRequest,
   listSchemas,
@@ -191,4 +223,5 @@ module.exports = {
   createContact,
   searchContacts,
   ensureImportedBlvdLifecycleStage,
+  ensureBlvdPreCutoverClientProperty,
 };

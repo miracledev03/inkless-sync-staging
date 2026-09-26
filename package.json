@@ -13,6 +13,8 @@
     "sync:locations": "node scripts/sync-locations.js",
     "sync:contacts": "node scripts/sync-contacts.js",
     "backfill:clients": "node scripts/backfill-clients.js",
+    "ensure:pre-cutover-property": "node scripts/ensure-pre-cutover-property.js",
+    "stamp:pre-cutover-flag": "node scripts/stamp-pre-cutover-flag.js",
     "create:client": "node scripts/create-client.js",
     "verify:qualify": "node scripts/verify-qualify-path.js",
     "simulate:hs-qualify": "node scripts/simulate-hs-qualify-webhook.js",

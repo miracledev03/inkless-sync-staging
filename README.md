@@ -48,7 +48,8 @@ Phase B Origin System notes: `../docs/Inkless_4.1_Origin_System_Phase_B.md`.
 
 - A1–A4, A7: auth, webhooks, locations, createClient, service map
 - A5: `npm run sync:contacts` (or `/sync-contact`)
-- A6: `npm run backfill:clients` dry-run → Imported - BLVD (`1422909443` in sandbox)
+- A6: `npm run backfill:clients` dry-run → **BLVD Pre-Cutover Client** + Lifecycle **Lead** (Dan Sep 24)
+- Ensure property: `npm run ensure:pre-cutover-property`
 - Qualify trigger: private app CRM webhook → `/webhooks/hubspot` (Dan: `docs/HUBSPOT_CRM_WEBHOOK_SETUP.md`; setup: `docs/HUBSPOT_CRM_WEBHOOK_INTERNAL.md`)
 
 ## Host for client demos
