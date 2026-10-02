@@ -22,8 +22,8 @@ async function main() {
   });
   const dates = await clientApi.cartBookableDates(c, {
     cartId: cart.id,
-    searchRangeLower: '2026-09-11',
-    searchRangeUpper: '2026-09-22',
+    searchRangeLower: new Date().toISOString().slice(0, 10),
+    searchRangeUpper: new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10),
     tz: 'America/Los_Angeles',
     limit: 5,
   });

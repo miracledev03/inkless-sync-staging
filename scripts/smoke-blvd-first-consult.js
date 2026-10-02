@@ -42,7 +42,7 @@ async function main() {
   const dates = await clientApi.cartBookableDates(config, {
     cartId: cart.id,
     searchRangeLower: new Date().toISOString().slice(0, 10),
-    searchRangeUpper: '2026-09-30',
+    searchRangeUpper: new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10),
     tz: 'America/Los_Angeles',
     limit: 14,
   });
