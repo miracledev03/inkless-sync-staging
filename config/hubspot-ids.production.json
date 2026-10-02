@@ -1,0 +1,65 @@
+{
+  "env": "production",
+  "portalId": "",
+  "notes": "Placeholder. Fill with: npm run pull:hubspot-ids -- --write (run with ENV_FILE=.env.production). The server refuses to start while any ID below is empty.",
+  "acquisition": {
+    "pipelineId": "",
+    "pipelineLabel": "Acquisition Pipeline",
+    "stages": {
+      "newOpportunity": "",
+      "consultationBooked": "",
+      "consultationAttended": "",
+      "consultationNoShowCancelled": "",
+      "firstSessionBooked": "",
+      "firstSessionNoShowCancelled": "",
+      "closedWon": "",
+      "closedLost": ""
+    },
+    "stageLabels": {
+      "newOpportunity": "New Opportunity",
+      "consultationBooked": "Consultation Booked",
+      "consultationAttended": "Consultation Attended",
+      "consultationNoShowCancelled": "Consultation No-Show / Cancelled",
+      "firstSessionBooked": "First Session Booked",
+      "firstSessionNoShowCancelled": "First Session No-Show / Cancelled",
+      "closedWon": "Closed Won",
+      "closedLost": "Closed Lost"
+    }
+  },
+  "treatmentJourney": {
+    "pipelineId": "",
+    "pipelineLabel": "Treatment Journey Pipeline",
+    "stages": {
+      "inTreatment": "",
+      "atRisk": "",
+      "treatmentCompleted": "",
+      "discontinued": ""
+    },
+    "stageLabels": {
+      "inTreatment": "In Treatment",
+      "atRisk": "At-Risk Treatment",
+      "treatmentCompleted": "Treatment Completed",
+      "discontinued": "Discontinued"
+    }
+  },
+  "lifecycle": {
+    "lead": "lead",
+    "qualifiedEngaged": "",
+    "consultationBooked": "",
+    "consultationAttended": "",
+    "consultationNoShowCancel": "",
+    "activeCustomer": "customer",
+    "completedCustomer": "",
+    "churned": ""
+  },
+  "lifecycleLabels": {
+    "lead": "Lead",
+    "qualifiedEngaged": "Qualified & Engaged",
+    "consultationBooked": "Consultation Booked",
+    "consultationAttended": "Consultation Attended",
+    "consultationNoShowCancel": "Consultation No-Show/Cancel",
+    "activeCustomer": "Active Customer",
+    "completedCustomer": "Completed Customer",
+    "churned": "Churned"
+  }
+}

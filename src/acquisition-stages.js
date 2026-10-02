@@ -1,31 +1,36 @@
-/** HubSpot sandbox Acquisition pipeline + stage ids (portal 51888138). */
-const ACQUISITION_PIPELINE_ID = '922793905';
+/** Acquisition pipeline + stage + lifecycle IDs for the configured HubSpot portal. */
+const { getConfig, loadHubSpotIds } = require('./config');
+
+const config = getConfig();
+const ids = loadHubSpotIds(config);
+
+const ACQUISITION_PIPELINE_ID = String(ids.acquisition.pipelineId);
 
 const STAGE = {
-  newOpportunity: '1409277698',
-  consultationBooked: '1409277699',
-  consultationAttended: '1409277700',
-  consultationNoShowCancelled: '1409277701',
-  firstSessionBooked: '1409277702',
-  firstSessionNoShowCancelled: '1409277703',
-  closedWon: '1409285445',
-  closedLost: '1409277704',
+  newOpportunity: ids.acquisition.stages.newOpportunity,
+  consultationBooked: ids.acquisition.stages.consultationBooked,
+  consultationAttended: ids.acquisition.stages.consultationAttended,
+  consultationNoShowCancelled: ids.acquisition.stages.consultationNoShowCancelled,
+  firstSessionBooked: ids.acquisition.stages.firstSessionBooked,
+  firstSessionNoShowCancelled: ids.acquisition.stages.firstSessionNoShowCancelled,
+  closedWon: ids.acquisition.stages.closedWon,
+  closedLost: ids.acquisition.stages.closedLost,
 };
 
 const LIFECYCLE = {
-  consultationBooked: '1409274217',
-  consultationAttended: '1409285289',
-  qualifiedEngaged: '1409285288',
-  /** Skipped-consult First Session cancel/no-show (portal 51888138). */
-  consultationNoShowCancel: '1438902888',
-  activeCustomer: 'customer',
+  lead: ids.lifecycle.lead,
+  consultationBooked: ids.lifecycle.consultationBooked,
+  consultationAttended: ids.lifecycle.consultationAttended,
+  qualifiedEngaged: config.qualifiedLifecycleValue || ids.lifecycle.qualifiedEngaged,
+  /** Skipped-consult First Session cancel/no-show. */
+  consultationNoShowCancel:
+    config.consultationNoShowCancelLifecycle ||
+    ids.lifecycle.consultationNoShowCancel,
+  activeCustomer: ids.lifecycle.activeCustomer,
+  completedCustomer: ids.lifecycle.completedCustomer,
+  churned: ids.lifecycle.churned,
 };
 
 const CLOSED_STAGES = new Set([STAGE.closedWon, STAGE.closedLost]);
 
-module.exports = {
-  ACQUISITION_PIPELINE_ID,
-  STAGE,
-  LIFECYCLE,
-  CLOSED_STAGES,
-};
+module.exports = { ACQUISITION_PIPELINE_ID, STAGE, LIFECYCLE, CLOSED_STAGES };

@@ -42,9 +42,9 @@ function isQualifiedLifecycleChange(event, config) {
   if (String(event.propertyName || '').toLowerCase() !== 'lifecyclestage') {
     return false;
   }
-  const want = String(config.qualifiedLifecycleValue || '1409285288');
+  const want = String(config.qualifiedLifecycleValue || '');
   const value = String(event.propertyValue ?? '');
-  return value === want;
+  return Boolean(want) && value === want;
 }
 
 async function handleQualifyEvent(config, event) {

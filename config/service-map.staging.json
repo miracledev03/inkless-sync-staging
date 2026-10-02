@@ -10,5 +10,7 @@
     "virtual_consult_es": "Virtual Free Tattoo Assessment ES",
     "in_office_consult": "In Office Free Tattoo Assessment",
     "first_session_100": "100 First Session"
-  }
+  },
+  "excludedServiceIds": [],
+  "excludedLabels": {}
 }

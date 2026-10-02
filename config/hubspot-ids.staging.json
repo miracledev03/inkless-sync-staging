@@ -1,0 +1,65 @@
+{
+  "env": "sandbox",
+  "portalId": "51888138",
+  "notes": "HubSpot sandbox pipeline, stage and lifecycle internal IDs. Labels are used by npm run pull:hubspot-ids to find the same records in another portal.",
+  "acquisition": {
+    "pipelineId": "922793905",
+    "pipelineLabel": "Acquisition Pipeline",
+    "stages": {
+      "newOpportunity": "1409277698",
+      "consultationBooked": "1409277699",
+      "consultationAttended": "1409277700",
+      "consultationNoShowCancelled": "1409277701",
+      "firstSessionBooked": "1409277702",
+      "firstSessionNoShowCancelled": "1409277703",
+      "closedWon": "1409285445",
+      "closedLost": "1409277704"
+    },
+    "stageLabels": {
+      "newOpportunity": "New Opportunity",
+      "consultationBooked": "Consultation Booked",
+      "consultationAttended": "Consultation Attended",
+      "consultationNoShowCancelled": "Consultation No-Show / Cancelled",
+      "firstSessionBooked": "First Session Booked",
+      "firstSessionNoShowCancelled": "First Session No-Show / Cancelled",
+      "closedWon": "Closed Won",
+      "closedLost": "Closed Lost"
+    }
+  },
+  "treatmentJourney": {
+    "pipelineId": "922783339",
+    "pipelineLabel": "Treatment Journey Pipeline",
+    "stages": {
+      "inTreatment": "1409163315",
+      "atRisk": "1409163316",
+      "treatmentCompleted": "1409163318",
+      "discontinued": "1409163319"
+    },
+    "stageLabels": {
+      "inTreatment": "In Treatment",
+      "atRisk": "At-Risk Treatment",
+      "treatmentCompleted": "Treatment Completed",
+      "discontinued": "Discontinued"
+    }
+  },
+  "lifecycle": {
+    "lead": "lead",
+    "qualifiedEngaged": "1409285288",
+    "consultationBooked": "1409274217",
+    "consultationAttended": "1409285289",
+    "consultationNoShowCancel": "1438902888",
+    "activeCustomer": "customer",
+    "completedCustomer": "1409162300",
+    "churned": "1409276676"
+  },
+  "lifecycleLabels": {
+    "lead": "Lead",
+    "qualifiedEngaged": "Qualified & Engaged",
+    "consultationBooked": "Consultation Booked",
+    "consultationAttended": "Consultation Attended",
+    "consultationNoShowCancel": "Consultation No-Show/Cancel",
+    "activeCustomer": "Active Customer",
+    "completedCustomer": "Completed Customer",
+    "churned": "Churned"
+  }
+}

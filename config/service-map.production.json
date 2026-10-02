@@ -1,0 +1,16 @@
+{
+  "env": "production",
+  "notes": "Placeholder. Fill with: npm run discover:services (run with ENV_FILE=.env.production), then review. Any service not mapped below and not in excludedServiceIds is treated as a Treatment Journey service.",
+  "virtual_consult_en": "",
+  "virtual_consult_es": "",
+  "in_office_consult": "",
+  "first_session_100": "",
+  "labels": {
+    "virtual_consult_en": "Virtual Free Tattoo Assessment EN",
+    "virtual_consult_es": "Virtual Free Tattoo Assessment ES",
+    "in_office_consult": "In Office Free Tattoo Assessment",
+    "first_session_100": "100 First Session"
+  },
+  "excludedServiceIds": [],
+  "excludedLabels": {}
+}

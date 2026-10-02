@@ -1,5 +1,5 @@
 const http = require('http');
-const { getConfig, loadServiceMap } = require('./config');
+const { getConfig, loadServiceMap, loadHubSpotIds } = require('./config');
 const log = require('./logger');
 const blvd = require('./blvd/api');
 const { createWebhookHandler } = require('./handlers/webhooks');
@@ -16,8 +16,65 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+const ADMIN_PATHS = new Set([
+  '/integration-review',
+  '/create-client',
+  '/refresh-deal-amounts',
+  '/sync-contact',
+  '/sync-appointment',
+  '/backfill-clients',
+  '/book-consult',
+]);
+
+/** Returns null when allowed, else { status, error }. */
+function checkAdminAuth(config, req) {
+  if (!config.adminApiToken) {
+    return config.isProduction
+      ? { status: 403, error: 'admin_token_not_configured' }
+      : null;
+  }
+  const header = String(req.headers['authorization'] || '');
+  const bearer = header.toLowerCase().startsWith('bearer ')
+    ? header.slice(7).trim()
+    : '';
+  const provided = String(req.headers['x-admin-token'] || bearer || '');
+  const a = Buffer.from(provided);
+  const b = Buffer.from(config.adminApiToken);
+  if (a.length === b.length && require('crypto').timingSafeEqual(a, b)) {
+    return null;
+  }
+  return { status: 401, error: 'unauthorized' };
+}
+
+/** Fail fast on environment / config mismatches before accepting traffic. */
+function preflight(config) {
+  const ids = loadHubSpotIds(config);
+  const { path: mapPath, map } = loadServiceMap(config);
+  if (config.isProduction) {
+    if (!map) throw new Error(`Service map not found: ${mapPath}`);
+    if (map.env !== 'production') {
+      throw new Error(
+        `Service map ${mapPath} is for env "${map.env}", expected "production".`
+      );
+    }
+    if (ids.env !== 'production') {
+      throw new Error(
+        `HubSpot ID map ${ids.path} is for env "${ids.env}", expected "production".`
+      );
+    }
+    if (!config.hubspotPortalId) {
+      throw new Error('HUBSPOT_PORTAL_ID is required in production.');
+    }
+  }
+  return {
+    ids,
+    serviceMap: { path: require('path').basename(mapPath), env: map?.env || null },
+  };
+}
+
 async function main() {
   const config = getConfig();
+  const pre = preflight(config);
   const handleWebhook = createWebhookHandler(config);
   const handleHubSpotWebhook = createHubSpotWebhookHandler(config);
   let appointmentPoller = null;
@@ -28,12 +85,23 @@ async function main() {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
     try {
+      if (ADMIN_PATHS.has(url.pathname)) {
+        const denied = checkAdminAuth(config, req);
+        if (denied) {
+          return sendJson(res, denied.status, { ok: false, error: denied.error });
+        }
+      }
+
       if (req.method === 'GET' && url.pathname === '/health') {
         const review = require('./integration-review');
         return sendJson(res, 200, {
           ok: true,
           portalId: config.hubspotPortalId,
           blvdEnv: config.blvdEnv,
+          production: config.isProduction,
+          hubspotIdMap: { env: pre.ids.env, portalId: pre.ids.portalId || null },
+          serviceMap: pre.serviceMap,
+          adminAuth: config.adminApiToken ? 'token' : config.isProduction ? 'locked' : 'open',
           poller: appointmentPoller?.getStatus
             ? appointmentPoller.getStatus()
             : { enabled: false },
@@ -91,6 +159,7 @@ async function main() {
           path,
           filled: filled.length,
           required: required.length,
+          excludedCount: (map?.excludedServiceIds || []).length,
           map,
         });
       }
@@ -178,8 +247,7 @@ async function main() {
             error: 'blvdClientId required',
           });
         }
-        const clients = await blvd.listClients(config);
-        const client = clients.find((c) => c.id === blvdClientId);
+        const client = await blvd.getClient(config, blvdClientId);
         if (!client) {
           return sendJson(res, 404, { ok: false, error: 'blvd_client_not_found' });
         }
@@ -297,6 +365,9 @@ async function main() {
       hubspotWebhookPath: config.hubspotWebhookPath,
       portalId: config.hubspotPortalId,
       blvdEnv: config.blvdEnv,
+      production: config.isProduction,
+      hubspotIdMap: pre.ids.path,
+      serviceMap: pre.serviceMap.path,
     });
     try {
       const { createAppointmentPoller } = require('./pollers/appointments');

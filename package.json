@@ -1,8 +1,8 @@
 {
-  "name": "inkless-sync-middleware",
-  "version": "0.1.0",
+  "name": "inkless-hubspot-boulevard-sync",
+  "version": "4.1.0",
   "private": true,
-  "description": "Inkless Feature 4.1 BLVD <-> HubSpot staging sync",
+  "description": "Inkless HubSpot Boulevard Sync (Feature 4.1)",
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
@@ -19,6 +19,8 @@
     "verify:qualify": "node scripts/verify-qualify-path.js",
     "simulate:hs-qualify": "node scripts/simulate-hs-qualify-webhook.js",
     "discover:services": "node scripts/discover-services.js",
+    "pull:hubspot-ids": "node scripts/pull-hubspot-ids.js",
+    "check:env": "node scripts/check-env.js",
     "inspect:appointment": "node scripts/inspect-appointment.js",
     "inspect:order": "node scripts/inspect-order.js",
     "inspect:matrix": "node scripts/inspect-matrix.js",

@@ -27,22 +27,49 @@ function requireEnv(name) {
   return value;
 }
 
-function getConfig() {
-  // Local: .env.staging; hosted: platform env vars (and optional .env)
-  loadEnvFile(path.join(__dirname, '..', '.env.staging'));
-  loadEnvFile(path.join(__dirname, '..', '.env'));
+const PRODUCTION_ENV_NAMES = new Set(['prod', 'production', 'live']);
 
-  const env = process.env.BLVD_ENV || 'sandbox';
-  const adminUrl =
-    env === 'prod'
-      ? 'https://dashboard.boulevard.io/api/2020-01/admin'
-      : 'https://sandbox.joinblvd.com/api/2020-01/admin';
+function isProductionEnv(env) {
+  return PRODUCTION_ENV_NAMES.has(String(env || '').trim().toLowerCase());
+}
+
+function getConfig() {
+  // Local: ENV_FILE (e.g. .env.production) or .env.staging; hosted: platform env vars.
+  const root = path.join(__dirname, '..');
+  if (process.env.ENV_FILE) {
+    loadEnvFile(path.resolve(root, process.env.ENV_FILE));
+  } else {
+    loadEnvFile(path.join(root, '.env.staging'));
+  }
+  loadEnvFile(path.join(root, '.env'));
+
+  const rawEnv = String(process.env.BLVD_ENV || 'sandbox').trim().toLowerCase();
+  const isProduction = isProductionEnv(rawEnv);
+  const env = isProduction ? 'production' : rawEnv;
+  const adminUrl = isProduction
+    ? 'https://dashboard.boulevard.io/api/2020-01/admin'
+    : 'https://sandbox.joinblvd.com/api/2020-01/admin';
+
+  const hubspotIdMapPath =
+    process.env.HUBSPOT_ID_MAP_PATH ||
+    (isProduction
+      ? './config/hubspot-ids.production.json'
+      : './config/hubspot-ids.staging.json');
+  const ids = readJsonIfExists(resolveFromRoot(hubspotIdMapPath));
 
   return {
     hubspotPortalId: process.env.HUBSPOT_PORTAL_ID || '',
     hubspotToken: process.env.HUBSPOT_ACCESS_TOKEN || '',
+    isProduction,
     blvdEnv: env,
     blvdAdminUrl: adminUrl,
+    hubspotIdMapPath,
+    /** Required on ops endpoints (backfill, create-client, sync-*) when set; mandatory in production. */
+    adminApiToken: process.env.ADMIN_API_TOKEN || '',
+    /** BLVD listClients page cap (50 per page). Default 2000 pages = 100,000 clients. */
+    blvdListClientsMaxPages: Number(
+      process.env.BLVD_LIST_CLIENTS_MAX_PAGES || 2000
+    ),
     blvdBusinessId: process.env.BLVD_BUSINESS_ID || '',
     blvdApiKey: process.env.BLVD_API_KEY || '',
     blvdSecretKey: process.env.BLVD_SECRET_KEY || '',
@@ -73,14 +100,21 @@ function getConfig() {
     pollClientsIntervalMs: Number(
       process.env.POLL_CLIENTS_INTERVAL_MS || 60000
     ),
-    /** Qualified & Engaged lifecycle internal value (portal 51888138). */
+    /** Qualified & Engaged lifecycle internal value (defaults from the HubSpot ID map). */
     qualifiedLifecycleValue:
-      process.env.HUBSPOT_QUALIFIED_LIFECYCLE_VALUE || '1409285288',
-    /** Skipped-consult cancel lifecycle (sandbox default; override via env if needed). */
+      process.env.HUBSPOT_QUALIFIED_LIFECYCLE_VALUE ||
+      ids?.lifecycle?.qualifiedEngaged ||
+      '',
+    /** Skipped-consult cancel lifecycle (defaults from the HubSpot ID map). */
     consultationNoShowCancelLifecycle:
-      process.env.HUBSPOT_CONSULTATION_NOSHOW_LIFECYCLE_VALUE || '1438902888',
+      process.env.HUBSPOT_CONSULTATION_NOSHOW_LIFECYCLE_VALUE ||
+      ids?.lifecycle?.consultationNoShowCancel ||
+      '',
     serviceMapPath:
-      process.env.SERVICE_MAP_PATH || './config/service-map.staging.json',
+      process.env.SERVICE_MAP_PATH ||
+      (isProduction
+        ? './config/service-map.production.json'
+        : './config/service-map.staging.json'),
     languageProperty: process.env.HUBSPOT_LANGUAGE_PROPERTY || 'language',
     blvdClientIdProperty:
       process.env.HUBSPOT_BLVD_CLIENT_ID_PROPERTY || 'blvd_client_id',
@@ -126,14 +160,106 @@ function getConfig() {
   };
 }
 
-function loadServiceMap(config = getConfig()) {
-  const full = path.isAbsolute(config.serviceMapPath)
-    ? config.serviceMapPath
-    : path.join(__dirname, '..', config.serviceMapPath);
-  if (!fs.existsSync(full)) {
-    return { path: full, map: null };
-  }
-  return { path: full, map: JSON.parse(fs.readFileSync(full, 'utf8')) };
+function resolveFromRoot(p) {
+  return path.isAbsolute(p) ? p : path.join(__dirname, '..', p);
 }
 
-module.exports = { getConfig, requireEnv, loadEnvFile, loadServiceMap };
+function readJsonIfExists(full) {
+  if (!fs.existsSync(full)) return null;
+  return JSON.parse(fs.readFileSync(full, 'utf8'));
+}
+
+function loadServiceMap(config = getConfig()) {
+  const full = resolveFromRoot(config.serviceMapPath);
+  return { path: full, map: readJsonIfExists(full) };
+}
+
+const REQUIRED_ACQUISITION_STAGES = [
+  'newOpportunity',
+  'consultationBooked',
+  'consultationAttended',
+  'consultationNoShowCancelled',
+  'firstSessionBooked',
+  'firstSessionNoShowCancelled',
+  'closedWon',
+  'closedLost',
+];
+const REQUIRED_JOURNEY_STAGES = [
+  'inTreatment',
+  'atRisk',
+  'treatmentCompleted',
+  'discontinued',
+];
+const REQUIRED_LIFECYCLES = [
+  'lead',
+  'qualifiedEngaged',
+  'consultationBooked',
+  'consultationAttended',
+  'consultationNoShowCancel',
+  'activeCustomer',
+  'completedCustomer',
+  'churned',
+];
+
+/** Returns a list of empty / missing ID paths in a HubSpot ID map. */
+function missingHubSpotIds(ids) {
+  if (!ids) return ['<file>'];
+  const missing = [];
+  if (!ids.acquisition?.pipelineId) missing.push('acquisition.pipelineId');
+  for (const k of REQUIRED_ACQUISITION_STAGES) {
+    if (!ids.acquisition?.stages?.[k]) missing.push(`acquisition.stages.${k}`);
+  }
+  if (!ids.treatmentJourney?.pipelineId) {
+    missing.push('treatmentJourney.pipelineId');
+  }
+  for (const k of REQUIRED_JOURNEY_STAGES) {
+    if (!ids.treatmentJourney?.stages?.[k]) {
+      missing.push(`treatmentJourney.stages.${k}`);
+    }
+  }
+  for (const k of REQUIRED_LIFECYCLES) {
+    if (!ids.lifecycle?.[k]) missing.push(`lifecycle.${k}`);
+  }
+  return missing;
+}
+
+/**
+ * Load + validate the per-environment HubSpot pipeline / stage / lifecycle IDs.
+ * Throws when the file is missing, incomplete, or belongs to a different portal
+ * than HUBSPOT_PORTAL_ID (prevents production token + sandbox IDs).
+ */
+function loadHubSpotIds(config = getConfig()) {
+  const full = resolveFromRoot(config.hubspotIdMapPath);
+  const ids = readJsonIfExists(full);
+  if (!ids) {
+    throw new Error(`HubSpot ID map not found: ${full}`);
+  }
+  const missing = missingHubSpotIds(ids);
+  if (missing.length) {
+    throw new Error(
+      `HubSpot ID map ${full} is incomplete (${missing.join(', ')}). ` +
+        'Run npm run pull:hubspot-ids -- --write against this portal.'
+    );
+  }
+  if (
+    config.hubspotPortalId &&
+    ids.portalId &&
+    String(config.hubspotPortalId) !== String(ids.portalId)
+  ) {
+    throw new Error(
+      `HubSpot ID map ${full} is for portal ${ids.portalId} but HUBSPOT_PORTAL_ID is ${config.hubspotPortalId}.`
+    );
+  }
+  return { path: full, ...ids };
+}
+
+module.exports = {
+  getConfig,
+  requireEnv,
+  loadEnvFile,
+  loadServiceMap,
+  loadHubSpotIds,
+  missingHubSpotIds,
+  isProductionEnv,
+  resolveFromRoot,
+};

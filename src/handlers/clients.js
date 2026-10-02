@@ -1,7 +1,7 @@
 const blvd = require('../blvd/api');
 const hs = require('../hubspot/client');
 const log = require('../logger');
-const { STAGE } = require('../acquisition-stages');
+const { STAGE, LIFECYCLE } = require('../acquisition-stages');
 const { ensureAcquisitionDeal } = require('../acquisition-deals');
 
 const CONTACT_PROPS = [
@@ -16,12 +16,12 @@ const CONTACT_PROPS = [
 
 /** Lifecycle stages that should not be overwritten by A6 backfill. */
 const PROTECTED_LIFECYCLES = new Set([
-  '1409285288', // Qualified & Engaged
-  '1409274217', // Consultation Booked
-  '1409285289', // Consultation Attended
-  'customer', // Active Customer
-  '1409162300', // Completed Customer
-  '1409276676', // Churned
+  LIFECYCLE.qualifiedEngaged,
+  LIFECYCLE.consultationBooked,
+  LIFECYCLE.consultationAttended,
+  LIFECYCLE.activeCustomer,
+  LIFECYCLE.completedCustomer,
+  LIFECYCLE.churned,
 ]);
 
 function mapBlvdClientToContactProps(client, blvdClientIdProperty) {

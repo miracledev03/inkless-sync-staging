@@ -41,9 +41,24 @@ function serviceMapById(map) {
   return byId;
 }
 
+function excludedIdSet(map) {
+  return new Set((map?.excludedServiceIds || []).map(normalizeId));
+}
+
 function classifyServiceId(config, serviceId) {
   const { map } = loadServiceMap(config);
   const role = serviceMapById(map)[normalizeId(serviceId)] || null;
+  if (!role && serviceId && excludedIdSet(map).has(normalizeId(serviceId))) {
+    return {
+      role: 'excluded',
+      serviceId,
+      consultationType: null,
+      pipeline: 'none',
+      outcomeDriver: null,
+      acquisitionOnly: false,
+      excluded: true,
+    };
+  }
   if (!role) {
     return {
       role: null,
@@ -71,7 +86,10 @@ function classifyAppointmentServices(config, appointmentServices = []) {
     };
   });
   const primary =
-    classified.find((c) => c.acquisitionOnly) || classified[0] || null;
+    classified.find((c) => c.acquisitionOnly) ||
+    classified.find((c) => !c.excluded) ||
+    classified[0] ||
+    null;
   return { primary, services: classified };
 }
 

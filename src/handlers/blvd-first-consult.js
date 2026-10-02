@@ -25,8 +25,8 @@ const MEETING_TYPE_BY_ROLE = {
 const DO_NOT_DOWNGRADE = new Set([
   LIFECYCLE.consultationAttended,
   LIFECYCLE.activeCustomer,
-  '1409162300', // Completed Customer
-  '1409276676', // Churned
+  LIFECYCLE.completedCustomer,
+  LIFECYCLE.churned,
 ]);
 
 function isConsultRole(role) {

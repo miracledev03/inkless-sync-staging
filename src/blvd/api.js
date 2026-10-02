@@ -96,9 +96,10 @@ async function findClientsByEmails(config, emails) {
  */
 async function listClients(config, opts = {}) {
   const first = opts.first || 50;
-  const maxPages = opts.maxPages || 100;
+  const maxPages = opts.maxPages || config.blvdListClientsMaxPages || 2000;
   const all = [];
   let after = null;
+  let truncated = false;
   for (let page = 0; page < maxPages; page += 1) {
     const data = await gql(
       config,
@@ -116,6 +117,15 @@ async function listClients(config, opts = {}) {
     }
     if (!conn?.pageInfo?.hasNextPage) break;
     after = conn.pageInfo.endCursor;
+    if (page === maxPages - 1) truncated = true;
+  }
+  if (truncated && !opts.maxPages) {
+    require('../logger').warn('BLVD listClients hit page cap; results truncated', {
+      maxPages,
+      pageSize: first,
+      returned: all.length,
+      hint: 'Raise BLVD_LIST_CLIENTS_MAX_PAGES',
+    });
   }
   return all;
 }
@@ -215,23 +225,34 @@ async function getAppointment(config, id) {
   return data.appointment;
 }
 
-async function listServices(config, first = 50) {
-  const data = await gql(
-    config,
-    `query($first: Int!) {
-      services(first: $first) {
-        edges {
-          node {
-            id
-            name
-            active
+async function listServices(config, first = 50, maxPages = 40) {
+  const all = [];
+  let after = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const data = await gql(
+      config,
+      `query($first: Int!, $after: String) {
+        services(first: $first, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id
+              name
+              active
+            }
           }
         }
-      }
-    }`,
-    { first }
-  );
-  return (data.services?.edges || []).map((e) => e.node);
+      }`,
+      { first, after }
+    );
+    const conn = data.services;
+    for (const edge of conn?.edges || []) {
+      if (edge?.node) all.push(edge.node);
+    }
+    if (!conn?.pageInfo?.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return all;
 }
 
 const ORDER_NODE = `

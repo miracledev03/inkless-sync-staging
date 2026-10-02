@@ -30,7 +30,7 @@ function createClientPoller(config, opts = {}) {
       ? Boolean(opts.enabled)
       : enabledEnv != null
         ? String(enabledEnv).toLowerCase() === 'true' || enabledEnv === '1'
-        : config.blvdEnv !== 'prod' && config.blvdEnv !== 'production';
+        : !config.isProduction;
 
   const seen = new Map();
   let timer = null;

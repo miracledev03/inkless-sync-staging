@@ -11,6 +11,7 @@ function shouldAttachToTreatmentJourney(classification) {
   const primary = classification?.primary;
   if (!primary) return false;
   if (primary.acquisitionOnly === true) return false;
+  if (primary.excluded === true) return false;
   return primary.pipeline === 'treatment_journey' || !primary.role;
 }
 
