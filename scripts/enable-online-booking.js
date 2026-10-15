@@ -6,18 +6,12 @@
  * Usage: node scripts/enable-online-booking.js
  */
 const { getConfig, loadServiceMap } = require('../src/config');
-const { generateAdminToken } = require('../src/blvd/auth');
-const { executeGraphQL, formatErrors } = require('../src/blvd/client');
+const { formatErrors } = require('../src/blvd/client');
 const blvd = require('../src/blvd/api');
 const clientApi = require('../src/blvd/client-api');
 
-async function adminGql(config, query, variables) {
-  const token = generateAdminToken(
-    config.blvdBusinessId,
-    config.blvdApiKey,
-    config.blvdSecretKey
-  );
-  return executeGraphQL(config.blvdAdminUrl, token, query, variables);
+function adminGql(config, query, variables) {
+  return blvd.adminExecute(config, query, variables);
 }
 
 function arg(name) {

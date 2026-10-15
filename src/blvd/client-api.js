@@ -1,18 +1,18 @@
 /**
  * Boulevard Client API helpers (cart booking).
- * Auth:
+ * Auth (BLVD_AUTH_MODE=oauth, v2026-06):
+ * - Guest: client-credentials token for the Client API resource
+ * - Authenticated: same token request with blvd_client_id (preferred for HS→BLVD)
+ * Auth (legacy apikey, 2020-01):
  * - Public: Basic API_KEY: (guest cart)
- * - Authenticated: blvd-client-v1 HMAC scoped to a client UUID (preferred for HS→BLVD)
+ * - Authenticated: blvd-client-v1 HMAC scoped to a client UUID
  */
 const crypto = require('crypto');
 const { executeGraphQL, formatErrors } = require('./client');
+const oauth = require('./oauth');
 
-function clientApiUrl(businessId, env) {
-  const host =
-    env === 'prod' || env === 'live' || env === 'production'
-      ? 'https://dashboard.boulevard.io'
-      : 'https://sandbox.joinblvd.com';
-  return `${host}/api/2020-01/${businessId}/client`;
+function clientApiUrl(config) {
+  return config.blvdClientApiUrl;
 }
 
 function clientUuidFromId(clientId) {
@@ -41,8 +41,11 @@ function clientBasicToken(apiKey) {
   return Buffer.from(`${String(apiKey)}:`, 'utf8').toString('base64');
 }
 
-function tokenFor(config, { clientId } = {}) {
+async function tokenFor(config, { clientId } = {}) {
   const uuid = clientUuidFromId(clientId);
+  if (config.blvdAuthMode === 'oauth') {
+    return `Bearer ${await oauth.getClientApiToken(config, { clientId: uuid })}`;
+  }
   if (uuid && config.blvdSecretKey) {
     return generateClientToken(
       config.blvdBusinessId,
@@ -54,10 +57,19 @@ function tokenFor(config, { clientId } = {}) {
   return clientBasicToken(config.blvdApiKey);
 }
 
+async function executeClient(config, query, variables, clientId) {
+  const url = clientApiUrl(config);
+  try {
+    return await executeGraphQL(url, await tokenFor(config, { clientId }), query, variables);
+  } catch (err) {
+    if (err.status !== 401 || config.blvdAuthMode !== 'oauth') throw err;
+    oauth.invalidate(url, clientUuidFromId(clientId));
+    return executeGraphQL(url, await tokenFor(config, { clientId }), query, variables);
+  }
+}
+
 async function clientGql(config, query, variables = {}, { clientId } = {}) {
-  const url = clientApiUrl(config.blvdBusinessId, config.blvdEnv);
-  const token = tokenFor(config, { clientId });
-  const response = await executeGraphQL(url, token, query, variables);
+  const response = await executeClient(config, query, variables, clientId);
   if (response.errors?.length) {
     const err = new Error(formatErrors(response.errors));
     err.code = response.errors[0]?.code || 'BLVD_CLIENT_API';

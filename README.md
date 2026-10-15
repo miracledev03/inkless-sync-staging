@@ -15,6 +15,19 @@ Environment differences live only in env vars and per-environment config files:
 `BLVD_ENV=production` (or `prod` / `live`) selects the production BLVD API and the production config files.
 Production refuses to start if the ID map is incomplete, belongs to another portal, or either map is not `env: production`.
 
+### Boulevard auth (v2026-06)
+
+| `BLVD_AUTH_MODE` | API | Credentials | Webhook signature |
+|---|---|---|---|
+| `oauth` (production default; staging since Oct 2026) | `2026-06` | `BLVD_CLIENT_ID`, `BLVD_CLIENT_SECRET` (Base64 text from the Developer Portal) | `x-blvd-oauth-hmac-*`, Base64-decoded client secret, max age `BLVD_WEBHOOK_MAX_AGE_SEC` (300) |
+| `apikey` (legacy) | `2020-01` | `BLVD_API_KEY`, `BLVD_SECRET_KEY` | `x-blvd-hmac-*` |
+
+In `oauth` mode the sync requests client-credentials tokens from `/oauth2/token` and caches them (24 h, renewed 5 min early): one Admin API token, one guest Client API token, and one client-bound token per booked client (`blvd_client_id`). The app manifest lives at `../docs/manifest.json`; the app must be installed on the business.
+
+- `npm run test:blvd-oauth`: request a token and read the business (read-only)
+- `npm run check:blvd-api`: run every Boulevard query the sync uses; mutations are validated without executing
+- `npm run webhook:register` (dry run) → `npm run webhook:register -- --apply`: one business-wide webhook with all 10 sync events (no `locationId`, so every location is covered)
+
 Code changes go to `master` first, are verified on staging, then merged into `production`.
 
 ## Production setup
@@ -23,10 +36,10 @@ Code changes go to `master` first, are verified on staging, then merged into `pr
 2. In PowerShell: `$env:ENV_FILE='.env.production'`
 3. `npm run pull:hubspot-ids` → review → `npm run pull:hubspot-ids -- --write`
 4. `npm run discover:services` → review → `npm run discover:services -- --write`; add retail / gift card / non-treatment service IDs to `excludedServiceIds`
-5. `npm run check:env` (read-only) until all checks pass
+5. `npm run test:blvd-oauth` and `npm run check:blvd-api` (read-only), then `npm run check:env` until all checks pass
 6. Commit both production config files on `master`, merge into `production`, deploy Render production
 7. `GET /health` → `production: true`, pollers `enabled: false`, `hubspotIdMap.env: production`
-8. Register production webhooks (BLVD + HubSpot CRM webhook) against the production host
+8. Register production webhooks against the production host: `npm run webhook:register -- --apply` (BLVD) + HubSpot CRM webhook
 9. `Remove-Item Env:ENV_FILE` when done so local scripts go back to staging
 
 ## Setup (staging)

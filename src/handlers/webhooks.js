@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { verifyWebhookSignature } = require('../blvd/auth');
+const {
+  verifyWebhookSignature,
+  verifyOAuthWebhookSignature,
+} = require('../blvd/auth');
 const idempotency = require('../idempotency');
 const log = require('../logger');
 
@@ -26,6 +29,8 @@ function saveEvent(eventType, payload, headers, signatureValid) {
           'x-blvd-event-type': headers['x-blvd-event-type'],
           'x-blvd-hmac-salt': headers['x-blvd-hmac-salt'],
           'x-blvd-hmac-sha256': headers['x-blvd-hmac-sha256'],
+          'x-blvd-oauth-hmac-salt': headers['x-blvd-oauth-hmac-salt'],
+          'x-blvd-oauth-hmac-sha256': headers['x-blvd-oauth-hmac-sha256'],
           'x-blvd-idempotency-key': headers['x-blvd-idempotency-key'],
         },
         body: payload,
@@ -53,10 +58,34 @@ function createWebhookHandler(config) {
       payload = { rawBody };
     }
 
+    const oauthSalt = headers['x-blvd-oauth-hmac-salt'];
+    const oauthSignature = headers['x-blvd-oauth-hmac-sha256'];
     const salt = headers['x-blvd-hmac-salt'];
     const signature = headers['x-blvd-hmac-sha256'];
     let signatureValid = null;
-    if (salt && signature && config.blvdSecretKey) {
+    if (oauthSalt || oauthSignature) {
+      if (!config.blvdClientSecret) {
+        signatureValid = false;
+        log.warn('OAuth-signed webhook but BLVD_CLIENT_SECRET is not set');
+      } else {
+        try {
+          const result = verifyOAuthWebhookSignature(
+            rawBody,
+            config.blvdClientSecret,
+            oauthSalt,
+            oauthSignature,
+            { maxAgeSec: config.blvdWebhookMaxAgeSec }
+          );
+          signatureValid = result.valid;
+          if (!result.valid) {
+            log.warn('OAuth webhook signature check failed', { reason: result.reason });
+          }
+        } catch (err) {
+          signatureValid = false;
+          log.warn('webhook signature verify error', { error: err.message });
+        }
+      }
+    } else if (salt && signature && config.blvdSecretKey) {
       try {
         signatureValid = verifyWebhookSignature(
           rawBody,
@@ -68,6 +97,9 @@ function createWebhookHandler(config) {
         signatureValid = false;
         log.warn('webhook signature verify error', { error: err.message });
       }
+    } else if (config.blvdAuthMode === 'oauth') {
+      signatureValid = false;
+      log.warn('webhook missing x-blvd-oauth-hmac-* headers');
     }
 
     if (signatureValid === false) {
@@ -92,6 +124,7 @@ function createWebhookHandler(config) {
       'UNKNOWN';
     const idemKey =
       headers['x-blvd-idempotency-key'] ||
+      payload.idempotencyKey ||
       `${eventType}:${payload.id || payload.appointmentId || rawBody.slice(0, 64)}`;
 
     if (idempotency.seen(idemKey)) {

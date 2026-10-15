@@ -21,7 +21,10 @@ function normalizeEventType(eventType) {
 }
 
 function parseOrderId(payload, headers = {}) {
+  // v2026-06 refunds send data.node = OrderRefund { id: urn:blvd:OrderRefund:…, orderId }.
   const candidates = [
+    payload?.data?.node?.orderId,
+    payload?.data?.node?.id,
     payload?.resourceId,
     payload?.resource_id,
     payload?.orderId,
@@ -32,12 +35,11 @@ function parseOrderId(payload, headers = {}) {
     payload?.order?.id,
     headers['x-blvd-resource-id'],
   ];
+  const isOrderUrn = (v) => v && String(v).startsWith('urn:blvd:Order:');
   for (const c of candidates) {
-    if (c && String(c).includes('Order')) return String(c);
+    if (isOrderUrn(c)) return String(c);
   }
-  if (payload?.id && String(payload.id).includes('Order')) {
-    return String(payload.id);
-  }
+  if (isOrderUrn(payload?.id)) return String(payload.id);
   return null;
 }
 

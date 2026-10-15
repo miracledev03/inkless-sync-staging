@@ -7,8 +7,8 @@
  * Usage: npm run webhook:register-orders
  */
 const { getConfig } = require('../src/config');
-const { generateAdminToken } = require('../src/blvd/auth');
-const { executeGraphQL, formatErrors } = require('../src/blvd/client');
+const { formatErrors } = require('../src/blvd/client');
+const { adminExecute } = require('../src/blvd/api');
 
 const TARGET_URL =
   process.env.WEBHOOK_PUBLIC_URL ||
@@ -18,15 +18,8 @@ const ORDER_EVENTS = ['ORDER_COMPLETED', 'ORDER_REFUND_CLOSED'];
 
 async function main() {
   const c = getConfig();
-  const token = generateAdminToken(
-    c.blvdBusinessId,
-    c.blvdApiKey,
-    c.blvdSecretKey
-  );
-
-  const list = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const list = await adminExecute(
+    c,
     `query {
       webhooks(first: 20) {
         edges {
@@ -65,9 +58,8 @@ async function main() {
     ...missing.map((eventType) => ({ eventType })),
   ];
 
-  const upd = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const upd = await adminExecute(
+    c,
     `mutation($input: UpdateWebhookInput!) {
       updateWebhook(input: $input) {
         webhook {

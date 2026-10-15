@@ -21,6 +21,12 @@ services:
         sync: false
       - key: BLVD_BUSINESS_ID
         sync: false
+      - key: BLVD_AUTH_MODE
+        sync: false
+      - key: BLVD_CLIENT_ID
+        sync: false
+      - key: BLVD_CLIENT_SECRET
+        sync: false
       - key: BLVD_API_KEY
         sync: false
       - key: BLVD_SECRET_KEY

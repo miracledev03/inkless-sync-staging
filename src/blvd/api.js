@@ -1,7 +1,11 @@
 const { generateAdminToken } = require('./auth');
 const { executeGraphQL, formatErrors } = require('./client');
+const oauth = require('./oauth');
 
-function tokenFor(config) {
+async function adminAuthorization(config) {
+  if (config.blvdAuthMode === 'oauth') {
+    return `Bearer ${await oauth.getAdminToken(config)}`;
+  }
   return generateAdminToken(
     config.blvdBusinessId,
     config.blvdApiKey,
@@ -9,13 +13,29 @@ function tokenFor(config) {
   );
 }
 
+/** Raw Admin API call (returns `{ data, errors }`); renews the OAuth token once on 401. */
+async function adminExecute(config, query, variables) {
+  try {
+    return await executeGraphQL(
+      config.blvdAdminUrl,
+      await adminAuthorization(config),
+      query,
+      variables
+    );
+  } catch (err) {
+    if (err.status !== 401 || config.blvdAuthMode !== 'oauth') throw err;
+    oauth.invalidate(config.blvdAdminUrl);
+    return executeGraphQL(
+      config.blvdAdminUrl,
+      await adminAuthorization(config),
+      query,
+      variables
+    );
+  }
+}
+
 async function gql(config, query, variables) {
-  const response = await executeGraphQL(
-    config.blvdAdminUrl,
-    tokenFor(config),
-    query,
-    variables
-  );
+  const response = await adminExecute(config, query, variables);
   if (response.errors?.length) {
     throw new Error(formatErrors(response.errors));
   }
@@ -330,6 +350,8 @@ async function findAppointmentByOrderId(config, { orderId, clientId, locationId 
 }
 
 module.exports = {
+  adminExecute,
+  adminAuthorization,
   getBusiness,
   listLocations,
   findClientsByEmails,

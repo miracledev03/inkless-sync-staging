@@ -3,20 +3,14 @@
  * upsert staff service rules with setBookable + setExternallyBookable.
  */
 const { getConfig, loadServiceMap } = require('../src/config');
-const { generateAdminToken } = require('../src/blvd/auth');
-const { executeGraphQL, formatErrors } = require('../src/blvd/client');
-const { listLocations } = require('../src/blvd/api');
+const { formatErrors } = require('../src/blvd/client');
+const { listLocations, adminExecute } = require('../src/blvd/api');
 
 const JOEY_STAFF_ID = 'urn:blvd:Staff:42e5b97d-7c6a-4d90-ba3d-908994ef205d';
 
 async function main() {
   const c = getConfig();
   const { map } = loadServiceMap(c);
-  const token = generateAdminToken(
-    c.blvdBusinessId,
-    c.blvdApiKey,
-    c.blvdSecretKey
-  );
   const locs = await listLocations(c);
   const locationId = locs[0].id;
 
@@ -31,9 +25,8 @@ async function main() {
     const serviceId = map[key];
     console.log('\n===', key, serviceId, '===');
 
-    const act = await executeGraphQL(
-      c.blvdAdminUrl,
-      token,
+    const act = await adminExecute(
+      c,
       `mutation($input: ServiceActivateAtLocationInput!) {
         serviceActivateAtLocation(input: $input) {
           serviceId
@@ -48,9 +41,8 @@ async function main() {
       console.log('activate', act.data.serviceActivateAtLocation);
     }
 
-    const upsert = await executeGraphQL(
-      c.blvdAdminUrl,
-      token,
+    const upsert = await adminExecute(
+      c,
       `mutation($input: StaffServiceRuleUpsertInput!) {
         staffServiceRuleUpsert(input: $input) {
           staffServiceRule {
@@ -85,9 +77,8 @@ async function main() {
   }
 
   // Verify staffServices now populated
-  const ss = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const ss = await adminExecute(
+    c,
     `query($id: ID!) {
       location(id: $id) {
         staffServices(first: 50) {

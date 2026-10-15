@@ -46,9 +46,24 @@ function getConfig() {
   const rawEnv = String(process.env.BLVD_ENV || 'sandbox').trim().toLowerCase();
   const isProduction = isProductionEnv(rawEnv);
   const env = isProduction ? 'production' : rawEnv;
-  const adminUrl = isProduction
-    ? 'https://dashboard.boulevard.io/api/2020-01/admin'
-    : 'https://sandbox.joinblvd.com/api/2020-01/admin';
+  const blvdHost = isProduction
+    ? 'https://dashboard.boulevard.io'
+    : 'https://sandbox.joinblvd.com';
+  // oauth = v2026-06 app (client credentials); apikey = legacy 2020-01 key + secret.
+  const blvdAuthMode = String(
+    process.env.BLVD_AUTH_MODE || (isProduction ? 'oauth' : 'apikey')
+  )
+    .trim()
+    .toLowerCase();
+  const blvdOAuth = blvdAuthMode === 'oauth';
+  const blvdApiVersion = blvdOAuth
+    ? process.env.BLVD_API_VERSION || '2026-06'
+    : '2020-01';
+  const blvdBusinessId = process.env.BLVD_BUSINESS_ID || '';
+  const adminUrl = `${blvdHost}/api/${blvdApiVersion}/admin`;
+  const clientApiUrl = blvdOAuth
+    ? `${blvdHost}/api/${blvdApiVersion}/client`
+    : `${blvdHost}/api/2020-01/${blvdBusinessId}/client`;
 
   const hubspotIdMapPath =
     process.env.HUBSPOT_ID_MAP_PATH ||
@@ -62,7 +77,11 @@ function getConfig() {
     hubspotToken: process.env.HUBSPOT_ACCESS_TOKEN || '',
     isProduction,
     blvdEnv: env,
+    blvdHost,
+    blvdAuthMode,
+    blvdApiVersion,
     blvdAdminUrl: adminUrl,
+    blvdClientApiUrl: clientApiUrl,
     hubspotIdMapPath,
     /** Required on ops endpoints (backfill, create-client, sync-*) when set; mandatory in production. */
     adminApiToken: process.env.ADMIN_API_TOKEN || '',
@@ -70,9 +89,14 @@ function getConfig() {
     blvdListClientsMaxPages: Number(
       process.env.BLVD_LIST_CLIENTS_MAX_PAGES || 2000
     ),
-    blvdBusinessId: process.env.BLVD_BUSINESS_ID || '',
+    blvdBusinessId,
     blvdApiKey: process.env.BLVD_API_KEY || '',
     blvdSecretKey: process.env.BLVD_SECRET_KEY || '',
+    blvdClientId: process.env.BLVD_CLIENT_ID || '',
+    /** Base64 text exactly as shown in the Boulevard Developer Portal. */
+    blvdClientSecret: process.env.BLVD_CLIENT_SECRET || '',
+    /** Reject OAuth-signed webhooks whose salt timestamp is older than this. */
+    blvdWebhookMaxAgeSec: Number(process.env.BLVD_WEBHOOK_MAX_AGE_SEC || 300),
     port: Number(process.env.PORT || 3456),
     webhookPath: process.env.BLVD_WEBHOOK_PATH || '/webhooks/boulevard',
     webhookPublicUrl: process.env.WEBHOOK_PUBLIC_URL || '',

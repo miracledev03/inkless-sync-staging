@@ -26,7 +26,7 @@ async function check(name, fn) {
 async function main() {
   const config = getConfig();
   console.log(
-    `Env: BLVD_ENV=${config.blvdEnv} production=${config.isProduction} portal=${config.hubspotPortalId || '(unset)'}\n`
+    `Env: BLVD_ENV=${config.blvdEnv} auth=${config.blvdAuthMode} api=${config.blvdApiVersion} production=${config.isProduction} portal=${config.hubspotPortalId || '(unset)'}\n`
   );
 
   await check('HubSpot ID map', async () => {
@@ -67,6 +67,20 @@ async function main() {
       throw new Error('HUBSPOT_WEBHOOK_SKIP_VERIFY must not be set in production');
     }
     return 'set';
+  });
+
+  await check('BLVD auth mode', async () => {
+    const mode = config.blvdAuthMode;
+    if (config.isProduction && mode !== 'oauth') {
+      throw new Error(`production needs BLVD_AUTH_MODE=oauth, got "${mode}"`);
+    }
+    if (mode === 'oauth' && (!config.blvdClientId || !config.blvdClientSecret)) {
+      throw new Error('BLVD_CLIENT_ID / BLVD_CLIENT_SECRET missing');
+    }
+    if (mode === 'apikey' && (!config.blvdApiKey || !config.blvdSecretKey)) {
+      throw new Error('BLVD_API_KEY / BLVD_SECRET_KEY missing');
+    }
+    return `${mode} (API ${config.blvdApiVersion})`;
   });
 
   await check('BLVD webhook verify', async () => {
@@ -117,6 +131,36 @@ async function main() {
   await check('Boulevard locations', async () => {
     const locs = await blvd.listLocations(config);
     return `${locs.length} location(s)`;
+  });
+
+  await check('Boulevard Client API token (booking)', async () => {
+    if (config.blvdAuthMode !== 'oauth') return 'n/a (apikey mode signs locally)';
+    await require('../src/blvd/oauth').getClientApiToken(config);
+    return `issued for ${config.blvdClientApiUrl}`;
+  });
+
+  await check('Boulevard webhook', async () => {
+    const url = config.webhookPublicUrl;
+    if (!url) throw new Error('WEBHOOK_PUBLIC_URL is empty');
+    const res = await blvd.adminExecute(
+      config,
+      `query { webhooks(first: 50) { edges { node { id url subscriptions { eventType enabled } } } } }`
+    );
+    if (res.errors?.length) throw new Error(res.errors.map((e) => e.message).join('; '));
+    const hooks = (res.data.webhooks?.edges || []).map((e) => e.node).filter((w) => w.url === url);
+    if (!hooks.length) throw new Error(`none registered for ${url} (run register-blvd-webhooks.js)`);
+    const enabled = new Set(
+      hooks.flatMap((w) => w.subscriptions.filter((s) => s.enabled).map((s) => s.eventType))
+    );
+    const want = [
+      'APPOINTMENT_CREATED', 'APPOINTMENT_UPDATED', 'APPOINTMENT_RESCHEDULED',
+      'APPOINTMENT_CANCELLED', 'APPOINTMENT_COMPLETED', 'ORDER_COMPLETED',
+      'ORDER_REFUND_CLOSED', 'CLIENT_CREATED', 'CLIENT_UPDATED', 'CLIENT_MERGED',
+    ];
+    const missing = want.filter((e) => !enabled.has(e));
+    if (missing.length) throw new Error(`missing/disabled: ${missing.join(', ')}`);
+    if (hooks.length > 1) throw new Error(`${hooks.length} webhooks share ${url} (duplicate deliveries)`);
+    return `${want.length} events enabled`;
   });
 
   const failed = results.filter((r) => !r).length;

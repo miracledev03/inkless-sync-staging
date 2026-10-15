@@ -544,7 +544,10 @@ function normalizeClientEventType(eventType) {
 }
 
 function parseClientId(payload, headers = {}) {
+  // v2026-06 CLIENT_MERGED: data.node is the merged-away client; mergedIntoClientId survives.
   const candidates = [
+    payload?.data?.node?.mergedIntoClientId,
+    payload?.data?.node?.id,
     payload?.resourceId,
     payload?.resource_id,
     payload?.clientId,

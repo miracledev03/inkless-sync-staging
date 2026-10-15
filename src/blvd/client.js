@@ -1,8 +1,13 @@
+/** `authToken` is a legacy Basic token, or a full `Bearer …` / `Basic …` header value. */
 async function executeGraphQL(url, authToken, query, variables = {}) {
+  const authorization = /^(Bearer|Basic) /.test(String(authToken))
+    ? authToken
+    : `Basic ${authToken}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      Authorization: `Basic ${authToken}`,
+      Authorization: authorization,
+      Accept: 'application/json',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ query, variables }),
@@ -17,7 +22,9 @@ async function executeGraphQL(url, authToken, query, variables = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${JSON.stringify(payload)}`);
+    const err = new Error(`HTTP ${response.status}: ${JSON.stringify(payload)}`);
+    err.status = response.status;
+    throw err;
   }
 
   return payload;

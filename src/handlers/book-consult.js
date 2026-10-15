@@ -441,16 +441,9 @@ async function bookConsult(config, body = {}) {
 
 async function findRecentAppointment(config, { clientId, locationId, startHint }) {
   if (!clientId || !locationId) return null;
-  const { generateAdminToken } = require('../blvd/auth');
-  const { executeGraphQL, formatErrors } = require('../blvd/client');
-  const token = generateAdminToken(
-    config.blvdBusinessId,
-    config.blvdApiKey,
-    config.blvdSecretKey
-  );
-  const response = await executeGraphQL(
-    config.blvdAdminUrl,
-    token,
+  const { formatErrors } = require('../blvd/client');
+  const response = await blvd.adminExecute(
+    config,
     `query($locationId: ID!, $clientId: ID!, $first: Int!) {
       appointments(locationId: $locationId, clientId: $clientId, first: $first) {
         edges {

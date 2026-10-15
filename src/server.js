@@ -50,7 +50,19 @@ function checkAdminAuth(config, req) {
 function preflight(config) {
   const ids = loadHubSpotIds(config);
   const { path: mapPath, map } = loadServiceMap(config);
+  if (!['oauth', 'apikey'].includes(config.blvdAuthMode)) {
+    throw new Error(`BLVD_AUTH_MODE must be "oauth" or "apikey", got "${config.blvdAuthMode}".`);
+  }
+  if (config.blvdAuthMode === 'oauth' && (!config.blvdClientId || !config.blvdClientSecret)) {
+    throw new Error('BLVD_AUTH_MODE=oauth needs BLVD_CLIENT_ID and BLVD_CLIENT_SECRET.');
+  }
+  if (config.blvdAuthMode === 'apikey' && (!config.blvdApiKey || !config.blvdSecretKey)) {
+    throw new Error('BLVD_AUTH_MODE=apikey needs BLVD_API_KEY and BLVD_SECRET_KEY.');
+  }
   if (config.isProduction) {
+    if (config.blvdAuthMode !== 'oauth') {
+      throw new Error('Production must use BLVD_AUTH_MODE=oauth (Boulevard v2026-06 app).');
+    }
     if (!map) throw new Error(`Service map not found: ${mapPath}`);
     if (map.env !== 'production') {
       throw new Error(
@@ -98,6 +110,7 @@ async function main() {
           ok: true,
           portalId: config.hubspotPortalId,
           blvdEnv: config.blvdEnv,
+          blvdAuth: { mode: config.blvdAuthMode, apiVersion: config.blvdApiVersion },
           production: config.isProduction,
           hubspotIdMap: { env: pre.ids.env, portalId: pre.ids.portalId || null },
           serviceMap: pre.serviceMap,
@@ -365,6 +378,8 @@ async function main() {
       hubspotWebhookPath: config.hubspotWebhookPath,
       portalId: config.hubspotPortalId,
       blvdEnv: config.blvdEnv,
+      blvdAuthMode: config.blvdAuthMode,
+      blvdApiVersion: config.blvdApiVersion,
       production: config.isProduction,
       hubspotIdMap: pre.ids.path,
       serviceMap: pre.serviceMap.path,

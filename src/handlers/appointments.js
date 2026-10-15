@@ -41,6 +41,7 @@ function normalizeEventType(eventType) {
 
 function parseAppointmentId(payload, headers = {}) {
   const candidates = [
+    payload?.data?.node?.id,
     payload?.resourceId,
     payload?.resource_id,
     payload?.appointmentId,

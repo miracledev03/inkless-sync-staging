@@ -3,9 +3,8 @@
  * returns slots (needed for B10 checkout smoke).
  */
 const { getConfig } = require('../src/config');
-const { generateAdminToken } = require('../src/blvd/auth');
-const { executeGraphQL, formatErrors } = require('../src/blvd/client');
-const { listLocations } = require('../src/blvd/api');
+const { formatErrors } = require('../src/blvd/client');
+const { listLocations, adminExecute } = require('../src/blvd/api');
 
 const JOEY_STAFF_ID = 'urn:blvd:Staff:42e5b97d-7c6a-4d90-ba3d-908994ef205d';
 
@@ -27,11 +26,6 @@ function nextWeekdays(count) {
 
 async function main() {
   const c = getConfig();
-  const token = generateAdminToken(
-    c.blvdBusinessId,
-    c.blvdApiKey,
-    c.blvdSecretKey
-  );
   const locs = await listLocations(c);
   const locationId = locs[0].id;
   const dates = nextWeekdays(10);
@@ -40,9 +34,8 @@ async function main() {
   console.log('dates', dates);
 
   for (const date of dates) {
-    const res = await executeGraphQL(
-      c.blvdAdminUrl,
-      token,
+    const res = await adminExecute(
+      c,
       `mutation($input: CreateShiftInput!) {
         createShift(input: $input) {
           shift {
@@ -83,9 +76,8 @@ async function main() {
   }
 
   // List shifts
-  const list = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const list = await adminExecute(
+    c,
     `query($locationId: ID!, $start: Date!, $end: Date!, $staffIds: [ID!]) {
       shifts(
         locationId: $locationId

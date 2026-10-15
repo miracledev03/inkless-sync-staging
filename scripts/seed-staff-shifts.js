@@ -5,8 +5,7 @@
  * Usage: node scripts/seed-staff-shifts.js
  */
 const { getConfig } = require('../src/config');
-const { generateAdminToken } = require('../src/blvd/auth');
-const { executeGraphQL, formatErrors } = require('../src/blvd/client');
+const { formatErrors } = require('../src/blvd/client');
 const blvd = require('../src/blvd/api');
 
 const DEFAULT_STAFF = [
@@ -14,13 +13,8 @@ const DEFAULT_STAFF = [
   'urn:blvd:Staff:42e5b97d-7c6a-4d90-ba3d-908994ef205d', // Joey
 ];
 
-async function adminGql(config, query, variables) {
-  const token = generateAdminToken(
-    config.blvdBusinessId,
-    config.blvdApiKey,
-    config.blvdSecretKey
-  );
-  return executeGraphQL(config.blvdAdminUrl, token, query, variables);
+function adminGql(config, query, variables) {
+  return blvd.adminExecute(config, query, variables);
 }
 
 function ymd(d) {

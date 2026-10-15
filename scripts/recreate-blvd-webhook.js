@@ -1,6 +1,6 @@
 const { getConfig } = require('../src/config');
-const { generateAdminToken } = require('../src/blvd/auth');
-const { executeGraphQL, formatErrors } = require('../src/blvd/client');
+const { formatErrors } = require('../src/blvd/client');
+const { adminExecute } = require('../src/blvd/api');
 
 const TARGET =
   'https://inkless-sync-staging-rubetech.onrender.com/webhooks/boulevard';
@@ -17,15 +17,8 @@ const EVENTS = [
 
 async function main() {
   const c = getConfig();
-  const token = generateAdminToken(
-    c.blvdBusinessId,
-    c.blvdApiKey,
-    c.blvdSecretKey
-  );
-
-  const list = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const list = await adminExecute(
+    c,
     `query {
       webhooks(first: 20) {
         edges {
@@ -55,9 +48,8 @@ async function main() {
       })),
       ...missing.map((eventType) => ({ eventType })),
     ];
-    const upd = await executeGraphQL(
-      c.blvdAdminUrl,
-      token,
+    const upd = await adminExecute(
+      c,
       `mutation($input: UpdateWebhookInput!) {
         updateWebhook(input: $input) {
           webhook {
@@ -79,19 +71,17 @@ async function main() {
 
   // Recreate webhook (delete + create) to force Boulevard to refresh delivery
   const locId = 'urn:blvd:Location:2e08439f-34dd-49ed-9c51-a957e9c59c09';
-  const del = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const del = await adminExecute(
+    c,
     `mutation($input: DeleteWebhookInput!) {
-      deleteWebhook(input: $input) { webhookId }
+      deleteWebhook(input: $input) { webhook { id } }
     }`,
     { input: { id: active.id } }
   );
   console.log('deleted', JSON.stringify(del));
 
-  const create = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const create = await adminExecute(
+    c,
     `mutation($input: CreateWebhookInput!) {
       createWebhook(input: $input) {
         webhook {

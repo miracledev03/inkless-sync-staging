@@ -4,8 +4,8 @@
  * Usage: npm run webhook:register-clients
  */
 const { getConfig } = require('../src/config');
-const { generateAdminToken } = require('../src/blvd/auth');
-const { executeGraphQL, formatErrors } = require('../src/blvd/client');
+const { formatErrors } = require('../src/blvd/client');
+const { adminExecute } = require('../src/blvd/api');
 
 const TARGET_URL =
   process.env.WEBHOOK_PUBLIC_URL ||
@@ -19,15 +19,8 @@ const CLIENT_EVENTS = [
 
 async function main() {
   const c = getConfig();
-  const token = generateAdminToken(
-    c.blvdBusinessId,
-    c.blvdApiKey,
-    c.blvdSecretKey
-  );
-
-  const list = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const list = await adminExecute(
+    c,
     `query {
       webhooks(first: 20) {
         edges {
@@ -66,9 +59,8 @@ async function main() {
     ...missing.map((eventType) => ({ eventType })),
   ];
 
-  const upd = await executeGraphQL(
-    c.blvdAdminUrl,
-    token,
+  const upd = await adminExecute(
+    c,
     `mutation($input: UpdateWebhookInput!) {
       updateWebhook(input: $input) {
         webhook {
