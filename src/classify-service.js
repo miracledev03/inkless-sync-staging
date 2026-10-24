@@ -31,12 +31,26 @@ function normalizeId(id) {
   return String(id || '').trim().toLowerCase();
 }
 
+function serviceIdsForRole(map, role) {
+  const ids = [];
+  const primary = map?.[role];
+  if (typeof primary === 'string' && primary.trim()) ids.push(primary.trim());
+  const extra = map?.alsoServiceIds?.[role];
+  if (Array.isArray(extra)) {
+    for (const id of extra) {
+      if (typeof id === 'string' && id.trim()) ids.push(id.trim());
+    }
+  }
+  return ids;
+}
+
 function serviceMapById(map) {
   const byId = {};
   if (!map) return byId;
   for (const role of Object.keys(ROLE_META)) {
-    const id = map[role];
-    if (id) byId[normalizeId(id)] = role;
+    for (const id of serviceIdsForRole(map, role)) {
+      byId[normalizeId(id)] = role;
+    }
   }
   return byId;
 }

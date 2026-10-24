@@ -1,19 +1,19 @@
 {
   "env": "production",
-  "portalId": "",
-  "notes": "Placeholder. Fill with: npm run pull:hubspot-ids -- --write (run with ENV_FILE=.env.production). The server refuses to start while any ID below is empty.",
+  "portalId": "50955637",
+  "notes": "Pulled from portal 50955637",
   "acquisition": {
-    "pipelineId": "",
+    "pipelineId": "922793905",
     "pipelineLabel": "Acquisition Pipeline",
     "stages": {
-      "newOpportunity": "",
-      "consultationBooked": "",
-      "consultationAttended": "",
-      "consultationNoShowCancelled": "",
-      "firstSessionBooked": "",
-      "firstSessionNoShowCancelled": "",
-      "closedWon": "",
-      "closedLost": ""
+      "newOpportunity": "1409277698",
+      "consultationBooked": "1409277699",
+      "consultationAttended": "1409277700",
+      "consultationNoShowCancelled": "1409277701",
+      "firstSessionBooked": "1409277702",
+      "firstSessionNoShowCancelled": "1409277703",
+      "closedWon": "1409285445",
+      "closedLost": "1409277704"
     },
     "stageLabels": {
       "newOpportunity": "New Opportunity",
@@ -27,13 +27,13 @@
     }
   },
   "treatmentJourney": {
-    "pipelineId": "",
+    "pipelineId": "922783339",
     "pipelineLabel": "Treatment Journey Pipeline",
     "stages": {
-      "inTreatment": "",
-      "atRisk": "",
-      "treatmentCompleted": "",
-      "discontinued": ""
+      "inTreatment": "1409163315",
+      "atRisk": "1409163316",
+      "treatmentCompleted": "1409163318",
+      "discontinued": "1409163319"
     },
     "stageLabels": {
       "inTreatment": "In Treatment",
@@ -44,13 +44,13 @@
   },
   "lifecycle": {
     "lead": "lead",
-    "qualifiedEngaged": "",
-    "consultationBooked": "",
-    "consultationAttended": "",
-    "consultationNoShowCancel": "",
+    "qualifiedEngaged": "1409285288",
+    "consultationBooked": "1409274217",
+    "consultationAttended": "1409285289",
+    "consultationNoShowCancel": "1422048786",
     "activeCustomer": "customer",
-    "completedCustomer": "",
-    "churned": ""
+    "completedCustomer": "1409162300",
+    "churned": "1409276676"
   },
   "lifecycleLabels": {
     "lead": "Lead",
