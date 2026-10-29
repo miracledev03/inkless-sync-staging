@@ -100,10 +100,12 @@ function mapOrderStatus(order, eventType) {
   return 'Open';
 }
 
-function plannedOrderProperties(order, { appointmentId, eventType }) {
+function plannedOrderProperties(order, { appointmentId, eventType, orderUidProperty }) {
   const paidCents = sumPayments(order);
+  const uidProp = orderUidProperty || 'blvd_order_uid';
   const props = {
     blvd_order_id: order.id,
+    [uidProp]: order.id,
     blvd_order_number: order.number || undefined,
     blvd_order_label: primaryLineLabel(order),
     blvd_order_status: mapOrderStatus(order, eventType),
@@ -236,21 +238,13 @@ async function processOrderUpsert(
     config.hubspotToken,
     config.orderObject
   );
-  const orderIdProperty = config.orderIdProperty || 'blvd_order_id';
-
-  const existingSearch = await hs.searchByProperty(
-    config.hubspotToken,
-    orderMeta.objectTypeId,
-    orderIdProperty,
-    order.id,
-    [orderIdProperty, 'blvd_appointment_id']
-  );
-  const existingOrder = existingSearch.results?.[0] || null;
+  const orderUidProperty = config.orderUidProperty || 'blvd_order_uid';
 
   const orderProperties = pickKnownProperties(
     plannedOrderProperties(order, {
       appointmentId,
       eventType: eventType || 'ORDER_COMPLETED',
+      orderUidProperty,
     }),
     orderMeta.properties
   );
@@ -274,26 +268,21 @@ async function processOrderUpsert(
     return result;
   }
 
-  let hsOrderId;
-  let orderAction;
-  if (existingOrder) {
-    const updated = await hs.updateObject(
-      config.hubspotToken,
-      orderMeta.objectTypeId,
-      existingOrder.id,
-      orderProperties
+  if (!orderMeta.properties.includes(orderUidProperty)) {
+    throw new Error(
+      `Missing unique HubSpot property ${orderUidProperty} on ${config.orderObject}. Run scripts/ensure-blvd-uid-properties.js`
     );
-    hsOrderId = updated.id;
-    orderAction = 'update';
-  } else {
-    const created = await hs.createObject(
-      config.hubspotToken,
-      orderMeta.objectTypeId,
-      orderProperties
-    );
-    hsOrderId = created.id;
-    orderAction = 'create';
   }
+
+  const upserted = await hs.upsertByUniqueProperty(
+    config.hubspotToken,
+    orderMeta.objectTypeId,
+    orderUidProperty,
+    order.id,
+    orderProperties
+  );
+  const hsOrderId = upserted.hsId;
+  const orderAction = upserted.action;
 
   const associations = { appointment: null, contact: null };
   if (appointmentId) {

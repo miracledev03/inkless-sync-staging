@@ -124,6 +124,60 @@ async function updateObject(token, objectType, id, properties) {
   });
 }
 
+async function deleteObject(token, objectType, id) {
+  return hsRequest(token, 'DELETE', `/crm/v3/objects/${objectType}/${id}`);
+}
+
+/**
+ * Create or update one CRM object by a unique property (HubSpot batch/upsert).
+ * idProperty must have hasUniqueValue: true on the object schema.
+ * @returns {{ action: 'create'|'update', hsId: string, record: object }}
+ */
+async function upsertByUniqueProperty(
+  token,
+  objectType,
+  idProperty,
+  externalId,
+  properties
+) {
+  if (!externalId) {
+    throw new Error('upsertByUniqueProperty requires externalId');
+  }
+  if (!idProperty) {
+    throw new Error('upsertByUniqueProperty requires idProperty');
+  }
+  const props = { ...(properties || {}) };
+  // id is the match key; also keep the property populated on the record.
+  if (props[idProperty] === undefined) props[idProperty] = String(externalId);
+
+  const body = await hsRequest(
+    token,
+    'POST',
+    `/crm/v3/objects/${objectType}/batch/upsert`,
+    {
+      inputs: [
+        {
+          id: String(externalId),
+          idProperty,
+          properties: props,
+        },
+      ],
+    }
+  );
+  const record = body?.results?.[0];
+  if (!record?.id) {
+    const err = new Error('HubSpot batch/upsert returned no result');
+    err.body = body;
+    throw err;
+  }
+  const isNew = record.new === true;
+  return {
+    action: isNew ? 'create' : 'update',
+    hsId: String(record.id),
+    record,
+  };
+}
+
 async function getContact(token, id, properties = []) {
   const qs = properties.length
     ? `?properties=${encodeURIComponent(properties.join(','))}`
@@ -218,6 +272,8 @@ module.exports = {
   associateDefault,
   createObject,
   updateObject,
+  deleteObject,
+  upsertByUniqueProperty,
   getContact,
   updateContact,
   createContact,

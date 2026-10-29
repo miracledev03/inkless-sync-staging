@@ -169,6 +169,9 @@ function getConfig() {
       process.env.HUBSPOT_APPOINTMENT_OBJECT || 'blvd_appointments',
     appointmentIdProperty:
       process.env.HUBSPOT_APPOINTMENT_ID_PROPERTY || 'blvd_appointment_id',
+    /** Unique HubSpot property used for batch/upsert (cannot flip uniqueness on blvd_appointment_id). */
+    appointmentUidProperty:
+      process.env.HUBSPOT_APPOINTMENT_UID_PROPERTY || 'blvd_appointment_uid',
     appointmentOriginProperty:
       process.env.HUBSPOT_APPOINTMENT_ORIGIN_PROPERTY ||
       'blvd_appointment_source',
@@ -181,6 +184,9 @@ function getConfig() {
     orderObject: process.env.HUBSPOT_ORDER_OBJECT || 'blvd_orders',
     orderIdProperty:
       process.env.HUBSPOT_ORDER_ID_PROPERTY || 'blvd_order_id',
+    /** Unique HubSpot property used for batch/upsert (cannot flip uniqueness on blvd_order_id). */
+    orderUidProperty:
+      process.env.HUBSPOT_ORDER_UID_PROPERTY || 'blvd_order_uid',
   };
 }
 

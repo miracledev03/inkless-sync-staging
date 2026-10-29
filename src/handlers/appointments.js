@@ -139,10 +139,17 @@ function buildAppointmentLabel(appointment, classification) {
   return parts.length ? parts.join(' · ') : null;
 }
 
-function plannedAppointmentProperties(appointment, classification, origin) {
+function plannedAppointmentProperties(
+  appointment,
+  classification,
+  origin,
+  appointmentUidProperty
+) {
   const primary = classification.primary;
+  const uidProp = appointmentUidProperty || 'blvd_appointment_uid';
   const props = {
     blvd_appointment_id: appointment.id,
+    [uidProp]: appointment.id,
     blvd_appointment_source: origin,
     last_synced_at: String(Date.now()),
     sync_status: 'ok',
@@ -164,8 +171,8 @@ function plannedAppointmentProperties(appointment, classification, origin) {
   if (primary?.serviceName) {
     props.blvd_appointment_service_name = primary.serviceName;
   }
-  // Required HS property; primary display is blvd_appointment_label (not this field).
-  props.blvd_appointment_order_id = appointment.orderId || 'none';
+  // Reference only — primary display is blvd_appointment_label. Empty when no order (never "none").
+  props.blvd_appointment_order_id = appointment.orderId || '';
   if (appointment.clientId || appointment.client?.id) {
     props.blvd_client_id = appointment.clientId || appointment.client.id;
   }
@@ -193,7 +200,7 @@ function plannedServiceProperties(svc, extra) {
 
 function pickKnownProperties(props, schemaNames) {
   const allowed = new Set((schemaNames || []).map((n) => String(n)));
-  const allowEmpty = new Set(['sync_error']);
+  const allowEmpty = new Set(['sync_error', 'blvd_appointment_order_id']);
   const out = {};
   for (const [k, v] of Object.entries(props || {})) {
     if (v === undefined || v === null) continue;
@@ -299,24 +306,45 @@ async function processAppointmentWebhook(
     config.appointmentOriginProperty || 'blvd_appointment_source';
   const apptIdProperty =
     config.appointmentIdProperty || 'blvd_appointment_id';
+  const apptUidProperty =
+    config.appointmentUidProperty || 'blvd_appointment_uid';
   const svcIdProperty =
     config.appointmentServiceIdProperty || 'blvd_appointment_service_id';
 
-  const existingSearch = await hs.searchByProperty(
-    config.hubspotToken,
-    apptMeta.objectTypeId,
-    apptIdProperty,
-    appointment.id,
-    [apptIdProperty, originProperty]
-  );
-  const existingAppt = existingSearch.results?.[0] || null;
+  // Prefer unique uid for lookup; fall back to legacy blvd_appointment_id.
+  let existingAppt = null;
+  if (apptMeta.properties.includes(apptUidProperty)) {
+    const byUid = await hs.searchByProperty(
+      config.hubspotToken,
+      apptMeta.objectTypeId,
+      apptUidProperty,
+      appointment.id,
+      [apptIdProperty, apptUidProperty, originProperty]
+    );
+    existingAppt = byUid.results?.[0] || null;
+  }
+  if (!existingAppt) {
+    const byLegacy = await hs.searchByProperty(
+      config.hubspotToken,
+      apptMeta.objectTypeId,
+      apptIdProperty,
+      appointment.id,
+      [apptIdProperty, apptUidProperty, originProperty]
+    );
+    existingAppt = byLegacy.results?.[0] || null;
+  }
   const origin = resolveOrigin(
     existingAppt?.properties?.[originProperty],
     forceOrigin || originFromWebhook()
   );
 
   const appointmentProperties = pickKnownProperties(
-    plannedAppointmentProperties(appointment, classification, origin),
+    plannedAppointmentProperties(
+      appointment,
+      classification,
+      origin,
+      apptUidProperty
+    ),
     apptMeta.properties
   );
   const extraById = Object.fromEntries(
@@ -424,28 +452,23 @@ async function processAppointmentWebhook(
     return result;
   }
 
-  const apptUpsert = existingAppt
-    ? {
-        action: 'update',
-        hsId: (
-          await hs.updateObject(
-            config.hubspotToken,
-            apptMeta.objectTypeId,
-            existingAppt.id,
-            appointmentProperties
-          )
-        ).id,
-      }
-    : {
-        action: 'create',
-        hsId: (
-          await hs.createObject(
-            config.hubspotToken,
-            apptMeta.objectTypeId,
-            appointmentProperties
-          )
-        ).id,
-      };
+  if (!apptMeta.properties.includes(apptUidProperty)) {
+    throw new Error(
+      `Missing unique HubSpot property ${apptUidProperty} on ${config.appointmentObject}. Run scripts/ensure-blvd-uid-properties.js`
+    );
+  }
+
+  const upsertedAppt = await hs.upsertByUniqueProperty(
+    config.hubspotToken,
+    apptMeta.objectTypeId,
+    apptUidProperty,
+    appointment.id,
+    appointmentProperties
+  );
+  const apptUpsert = {
+    action: upsertedAppt.action,
+    hsId: upsertedAppt.hsId,
+  };
 
   const serviceUpserts = [];
   for (const svcProps of serviceProperties) {

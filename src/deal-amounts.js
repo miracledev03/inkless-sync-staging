@@ -34,6 +34,48 @@ function orderAmountDollars(props = {}) {
   return 0;
 }
 
+function isRefundOrder(props = {}) {
+  return /refund/i.test(String(props.blvd_order_status || ''));
+}
+
+/**
+ * Collapse duplicate HubSpot order rows that share one Boulevard order id.
+ * Prefer non-refund, then higher paid/total, then higher HubSpot record id.
+ */
+function dedupeOrdersByBlvdId(orders = []) {
+  const byBlvd = new Map();
+  for (const order of orders) {
+    const props = order.properties || {};
+    const blvdId = props.blvd_order_id || `hs:${order.id}`;
+    const prev = byBlvd.get(blvdId);
+    if (!prev) {
+      byBlvd.set(blvdId, order);
+      continue;
+    }
+    const prevProps = prev.properties || {};
+    const prevRefund = isRefundOrder(prevProps);
+    const refund = isRefundOrder(props);
+    if (prevRefund && !refund) {
+      byBlvd.set(blvdId, order);
+      continue;
+    }
+    if (!prevRefund && refund) continue;
+
+    const prevAmt = orderAmountDollars(prevProps);
+    const amt = orderAmountDollars(props);
+    if (amt > prevAmt) {
+      byBlvd.set(blvdId, order);
+      continue;
+    }
+    if (amt < prevAmt) continue;
+
+    if (String(order.id) > String(prev.id)) {
+      byBlvd.set(blvdId, order);
+    }
+  }
+  return [...byBlvd.values()];
+}
+
 async function listOrdersForContact(config, contactId, blvdClientId) {
   const orderMeta = await hs.resolveObjectTypeId(
     config.hubspotToken,
@@ -199,9 +241,11 @@ async function refreshDealAmounts(config, { contactId, dryRun } = {}) {
     blvdClientId
   );
 
+  const uniqueOrders = dedupeOrdersByBlvdId(orders);
+
   let acquisitionSum = 0;
   const acquisitionOrderIds = [];
-  for (const order of orders) {
+  for (const order of uniqueOrders) {
     const amt = orderAmountDollars(order.properties || {});
     if (amt <= 0) continue;
     if (await isAcquisitionOrder(config, order.properties || {})) {
@@ -226,12 +270,12 @@ async function refreshDealAmounts(config, { contactId, dryRun } = {}) {
       orderObjectTypeId
     );
     // Prefer deal associations; if empty, fall back to non-acquisition contact orders
-    const source =
+    const sourceRaw =
       journeyOrders.length > 0
         ? journeyOrders
         : (
             await Promise.all(
-              orders.map(async (o) => ({
+              uniqueOrders.map(async (o) => ({
                 order: o,
                 acquisition: await isAcquisitionOrder(config, o.properties || {}),
               }))
@@ -239,6 +283,7 @@ async function refreshDealAmounts(config, { contactId, dryRun } = {}) {
           )
             .filter((row) => !row.acquisition)
             .map((row) => row.order);
+    const source = dedupeOrdersByBlvdId(sourceRaw);
 
     for (const order of source) {
       const amt = orderAmountDollars(order.properties || {});
@@ -314,5 +359,6 @@ async function refreshDealAmounts(config, { contactId, dryRun } = {}) {
 module.exports = {
   refreshDealAmounts,
   orderAmountDollars,
+  dedupeOrdersByBlvdId,
   ACQUISITION_AMOUNT_CAP,
 };
