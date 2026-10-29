@@ -86,7 +86,17 @@ function resolveFirstSession100Matrix(
     };
   }
 
-  if (state === 'BOOKED' || type === 'APPOINTMENT_CREATED') {
+  // Same as in-person consult: Boulevard often uses CONFIRMED + UPDATED, not BOOKED + CREATED.
+  if (
+    state === 'BOOKED' ||
+    state === 'CONFIRMED' ||
+    state === 'ACTIVE' ||
+    state === 'ARRIVED' ||
+    type === 'APPOINTMENT_CREATED' ||
+    type === 'APPOINTMENT_CONFIRMED' ||
+    type === 'APPOINTMENT_ACTIVE' ||
+    type === 'APPOINTMENT_ARRIVED'
+  ) {
     return {
       apply: true,
       matrix: 'first_session_100',
@@ -97,22 +107,6 @@ function resolveFirstSession100Matrix(
       lifecycle: null,
       incrementNoShow: false,
       voidOrder: false,
-    };
-  }
-
-  if (
-    state === 'CONFIRMED' ||
-    state === 'ACTIVE' ||
-    state === 'ARRIVED' ||
-    type === 'APPOINTMENT_CONFIRMED' ||
-    type === 'APPOINTMENT_ACTIVE' ||
-    type === 'APPOINTMENT_ARRIVED'
-  ) {
-    return {
-      apply: false,
-      reason: 'stay_first_session_booked',
-      matrix: 'first_session_100',
-      blvdState: state,
     };
   }
 

@@ -54,7 +54,19 @@ function resolveInPersonConsultMatrix(appointment, eventType, classification) {
     };
   }
 
-  if (state === 'BOOKED' || type === 'APPOINTMENT_CREATED') {
+  // Boulevard often creates/updates staff bookings as CONFIRMED (not BOOKED), and may
+  // only send APPOINTMENT_UPDATED. Treat all pre-final open states as Consultation Booked
+  // (idempotent if already there). Otherwise book appears to "do nothing" until Final.
+  if (
+    state === 'BOOKED' ||
+    state === 'CONFIRMED' ||
+    state === 'ACTIVE' ||
+    state === 'ARRIVED' ||
+    type === 'APPOINTMENT_CREATED' ||
+    type === 'APPOINTMENT_CONFIRMED' ||
+    type === 'APPOINTMENT_ACTIVE' ||
+    type === 'APPOINTMENT_ARRIVED'
+  ) {
     return {
       apply: true,
       matrix: 'in_person_consult',
@@ -63,22 +75,6 @@ function resolveInPersonConsultMatrix(appointment, eventType, classification) {
       dealStage: STAGE.consultationBooked,
       lifecycle: LIFECYCLE.consultationBooked,
       incrementNoShow: false,
-    };
-  }
-
-  if (
-    state === 'CONFIRMED' ||
-    state === 'ACTIVE' ||
-    state === 'ARRIVED' ||
-    type === 'APPOINTMENT_CONFIRMED' ||
-    type === 'APPOINTMENT_ACTIVE' ||
-    type === 'APPOINTMENT_ARRIVED'
-  ) {
-    return {
-      apply: false,
-      reason: 'stay_consultation_booked',
-      matrix: 'in_person_consult',
-      blvdState: state,
     };
   }
 
