@@ -61,7 +61,9 @@ function parseAppointmentId(payload, headers = {}) {
   return null;
 }
 
-function mapStatus(state) {
+function mapStatus(state, appointment) {
+  // Prefer cancelled flag — Boulevard can leave state=FINAL while cancelled=true.
+  if (appointment?.cancelled) return 'Cancelled';
   const key = String(state || '').toUpperCase();
   return STATE_TO_STATUS[key] || null;
 }
@@ -132,9 +134,7 @@ function buildAppointmentLabel(appointment, classification) {
   if (service) parts.push(service);
   const when = formatApptDate(appointment.startAt);
   if (when) parts.push(when);
-  const status = appointment.cancelled
-    ? 'Cancelled'
-    : mapStatus(appointment.state);
+  const status = mapStatus(appointment.state, appointment);
   if (status) parts.push(status);
   return parts.length ? parts.join(' · ') : null;
 }
@@ -157,7 +157,7 @@ function plannedAppointmentProperties(
   };
   const label = buildAppointmentLabel(appointment, classification);
   if (label) props.blvd_appointment_label = label;
-  const status = mapStatus(appointment.state);
+  const status = mapStatus(appointment.state, appointment);
   if (status) props.blvd_appointment_status = status;
   const outcome = mapOutcome(appointment);
   if (outcome) props.blvd_appointment_outcome = outcome;
@@ -171,8 +171,9 @@ function plannedAppointmentProperties(
   if (primary?.serviceName) {
     props.blvd_appointment_service_name = primary.serviceName;
   }
-  // Reference only — primary display is blvd_appointment_label. Empty when no order (never "none").
-  props.blvd_appointment_order_id = appointment.orderId || '';
+  // Required HubSpot property (not primary display). Use "none" when no order so creates succeed
+  // (batch/upsert rejects empty required fields — broke cancel sync for never-checked-out appts).
+  props.blvd_appointment_order_id = appointment.orderId || 'none';
   if (appointment.clientId || appointment.client?.id) {
     props.blvd_client_id = appointment.clientId || appointment.client.id;
   }
@@ -200,7 +201,7 @@ function plannedServiceProperties(svc, extra) {
 
 function pickKnownProperties(props, schemaNames) {
   const allowed = new Set((schemaNames || []).map((n) => String(n)));
-  const allowEmpty = new Set(['sync_error', 'blvd_appointment_order_id']);
+  const allowEmpty = new Set(['sync_error']);
   const out = {};
   for (const [k, v] of Object.entries(props || {})) {
     if (v === undefined || v === null) continue;
