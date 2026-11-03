@@ -46,7 +46,11 @@ async function requestToken(config, { resource, clientUuid }) {
 
   const res = await fetch(`${config.blvdHost}/oauth2/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'User-Agent': 'InklessHubSpotBlvdSync/4.1 (RubeTech backfill)',
+    },
     body: JSON.stringify(body),
   });
   const text = await res.text();

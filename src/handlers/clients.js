@@ -277,12 +277,18 @@ async function backfillBlvdClients(config, opts = {}) {
     );
   }
 
-  // Fetch only what this chunk needs (offset+limit), not the full BLVD list.
-  const fetchMax = limit != null ? offset + limit : null;
-  let clients = await blvd.listClients(
-    config,
-    fetchMax != null ? { max: fetchMax } : {}
-  );
+  // Prefer a preloaded client list (disk cache) so chunked runs do not
+  // re-page Boulevard from the start and trip Cloudflare rate limits.
+  let clients;
+  if (Array.isArray(opts.clients)) {
+    clients = opts.clients;
+  } else {
+    const fetchMax = limit != null ? offset + limit : null;
+    clients = await blvd.listClients(
+      config,
+      fetchMax != null ? { max: fetchMax } : {}
+    );
+  }
   if (offset) clients = clients.slice(offset);
   if (limit) clients = clients.slice(0, limit);
 

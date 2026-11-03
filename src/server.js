@@ -317,6 +317,8 @@ async function main() {
         const result = await backfillBlvdClients(config, {
           dryRun,
           limit: body.limit,
+          offset: body.offset,
+          summaryOnly: body.summaryOnly !== false,
         });
         return sendJson(res, 200, { ok: result.errors === 0, ...result });
       }
