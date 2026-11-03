@@ -117,6 +117,8 @@ async function findClientsByEmails(config, emails) {
 async function listClients(config, opts = {}) {
   const first = opts.first || 50;
   const maxPages = opts.maxPages || config.blvdListClientsMaxPages || 2000;
+  const max =
+    opts.max != null && Number(opts.max) > 0 ? Number(opts.max) : null;
   const all = [];
   let after = null;
   let truncated = false;
@@ -134,6 +136,7 @@ async function listClients(config, opts = {}) {
     const conn = data.clients;
     for (const edge of conn?.edges || []) {
       if (edge?.node) all.push(edge.node);
+      if (max && all.length >= max) return all.slice(0, max);
     }
     if (!conn?.pageInfo?.hasNextPage) break;
     after = conn.pageInfo.endCursor;

@@ -263,6 +263,9 @@ async function backfillBlvdClients(config, opts = {}) {
   const dryRun = opts.dryRun !== false;
   const limit =
     opts.limit != null && Number(opts.limit) > 0 ? Number(opts.limit) : null;
+  const offset =
+    opts.offset != null && Number(opts.offset) > 0 ? Number(opts.offset) : 0;
+  const summaryOnly = opts.summaryOnly === true;
 
   const flagProp = config.blvdPreCutoverClientProperty;
   const leadValue = config.backfillLifecycleValue || 'lead';
@@ -274,13 +277,21 @@ async function backfillBlvdClients(config, opts = {}) {
     );
   }
 
-  let clients = await blvd.listClients(config);
+  // Fetch only what this chunk needs (offset+limit), not the full BLVD list.
+  const fetchMax = limit != null ? offset + limit : null;
+  let clients = await blvd.listClients(
+    config,
+    fetchMax != null ? { max: fetchMax } : {}
+  );
+  if (offset) clients = clients.slice(offset);
   if (limit) clients = clients.slice(0, limit);
 
   const summary = {
     dryRun,
     preCutoverProperty: flagProp,
     backfillLifecycleValue: leadValue,
+    offset,
+    limit: limit || null,
     totalClients: clients.length,
     would_create: 0,
     would_update: 0,
@@ -385,6 +396,8 @@ async function backfillBlvdClients(config, opts = {}) {
 
   log.info('backfillBlvdClients complete', {
     dryRun,
+    offset: summary.offset,
+    limit: summary.limit,
     totalClients: summary.totalClients,
     would_create: summary.would_create,
     would_update: summary.would_update,
@@ -394,6 +407,10 @@ async function backfillBlvdClients(config, opts = {}) {
     errors: summary.errors,
   });
 
+  if (summaryOnly) {
+    const { results, ...counts } = summary;
+    return counts;
+  }
   return summary;
 }
 
