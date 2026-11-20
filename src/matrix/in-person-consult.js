@@ -8,7 +8,7 @@ const {
 
 /**
  * Boulevard-driven in-person consult matrix (spec §7.1).
- * Virtual consults use hubspot_meeting_outcome — not this module.
+ * Virtual consults: see matrix/virtual-consult.js (4.2.1 boulevard-driven).
  */
 function resolveInPersonConsultMatrix(appointment, eventType, classification) {
   const type = normalizeEventType(eventType);

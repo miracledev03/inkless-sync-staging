@@ -1,16 +1,18 @@
 const { loadServiceMap } = require('./config');
 
 const ROLE_META = {
+  // 4.2.1: Meeting Outcomes write Final/Cancel into Boulevard first;
+  // Acquisition deal moves follow Boulevard state (same as in-person).
   virtual_consult_en: {
     consultationType: 'Virtual - English',
     pipeline: 'acquisition',
-    outcomeDriver: 'hubspot_meeting_outcome',
+    outcomeDriver: 'boulevard',
     acquisitionOnly: true,
   },
   virtual_consult_es: {
     consultationType: 'Virtual - Spanish',
     pipeline: 'acquisition',
-    outcomeDriver: 'hubspot_meeting_outcome',
+    outcomeDriver: 'boulevard',
     acquisitionOnly: true,
   },
   in_office_consult: {

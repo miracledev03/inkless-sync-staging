@@ -1,0 +1,45 @@
+{
+  "env": "sandbox",
+  "portalId": "51888138",
+  "notes": "Fill meetingTypeId values from HubSpot sandbox Meeting Types (Joey Virtual EN test page). Labels must match C2 signals where possible. Staff rows map HS Meeting owner → BLVD staff variant.",
+  "types": {
+    "virtual_consult_en": {
+      "serviceKey": "virtual_consult_en",
+      "label": "Virtual EN",
+      "meetingTypeId": "",
+      "meetingTypeName": "Virtual EN"
+    },
+    "virtual_consult_es": {
+      "serviceKey": "virtual_consult_es",
+      "label": "Virtual ES",
+      "meetingTypeId": "",
+      "meetingTypeName": "Virtual ES"
+    }
+  },
+  "staff": [
+    {
+      "label": "Joey (sandbox)",
+      "hsOwnerEmails": [],
+      "hsOwnerIds": [],
+      "namePatterns": ["Joseph Rios", "Joey"],
+      "blvdStaffId": "42e5b97d-7c6a-4d90-ba3d-908994ef205d"
+    }
+  ],
+  "outcomes": {
+    "completed": {
+      "hsValues": ["COMPLETED", "Completed", "completed"],
+      "blvdState": "Final",
+      "cancelReason": null
+    },
+    "no_show": {
+      "hsValues": ["NO_SHOW", "No show", "No Show", "no_show"],
+      "blvdState": "Cancelled",
+      "cancelReason": "Client did not show up"
+    },
+    "canceled": {
+      "hsValues": ["CANCELED", "CANCELLED", "Canceled", "Cancelled", "canceled", "cancelled"],
+      "blvdState": "Cancelled",
+      "cancelReason": null
+    }
+  }
+}

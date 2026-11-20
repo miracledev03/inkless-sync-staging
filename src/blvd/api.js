@@ -34,10 +34,20 @@ async function adminExecute(config, query, variables) {
   }
 }
 
+function throwBlvdGraphqlError(errors) {
+  const msg = formatErrors(errors);
+  const err = new Error(msg);
+  err.blvdErrors = errors;
+  if (/missing required scope/i.test(msg)) {
+    err.code = 'BLVD_SCOPE_MISSING';
+  }
+  throw err;
+}
+
 async function gql(config, query, variables) {
   const response = await adminExecute(config, query, variables);
   if (response.errors?.length) {
-    throw new Error(formatErrors(response.errors));
+    throwBlvdGraphqlError(response.errors);
   }
   return response.data;
 }
@@ -248,6 +258,201 @@ async function getAppointment(config, id) {
   return data.appointment;
 }
 
+/**
+ * Cancel a Boulevard appointment (Admin API).
+ * @param {object} opts
+ * @param {string} opts.id appointment id
+ * @param {string} [opts.reason] AppointmentCancellationReason (default CLIENT_CANCEL)
+ * @param {string} [opts.notes]
+ * @param {boolean} [opts.notifyClient]
+ */
+async function cancelAppointment(config, opts = {}) {
+  const id = opts.id || opts.appointmentId;
+  if (!id) throw new Error('appointment id required');
+  const input = {
+    id,
+    reason: opts.reason || 'CLIENT_CANCEL',
+  };
+  if (opts.notes != null) input.notes = String(opts.notes);
+  if (opts.notifyClient != null) input.notifyClient = Boolean(opts.notifyClient);
+
+  const data = await gql(
+    config,
+    `mutation($input: CancelAppointmentInput!) {
+      cancelAppointment(input: $input) {
+        appointment { ${APPOINTMENT_NODE} }
+      }
+    }`,
+    { input }
+  );
+  return data.cancelAppointment.appointment;
+}
+
+async function appointmentRescheduleAvailableDates(
+  config,
+  { appointmentId, searchRangeLower, searchRangeUpper, tz }
+) {
+  const input = {
+    appointmentId,
+    searchRangeLower,
+    searchRangeUpper,
+  };
+  if (tz) input.tz = tz;
+  const data = await gql(
+    config,
+    `mutation($input: AppointmentRescheduleAvailableDatesInput!) {
+      appointmentRescheduleAvailableDates(input: $input) {
+        availableDates { date }
+      }
+    }`,
+    { input }
+  );
+  return (
+    data.appointmentRescheduleAvailableDates?.availableDates || []
+  ).map((d) => d.date || d);
+}
+
+async function appointmentRescheduleAvailableTimes(
+  config,
+  { appointmentId, date, tz }
+) {
+  const input = { appointmentId, date };
+  if (tz) input.tz = tz;
+  const data = await gql(
+    config,
+    `mutation($input: AppointmentRescheduleAvailableTimesInput!) {
+      appointmentRescheduleAvailableTimes(input: $input) {
+        availableTimes { bookableTimeId startTime }
+      }
+    }`,
+    { input }
+  );
+  return data.appointmentRescheduleAvailableTimes?.availableTimes || [];
+}
+
+/**
+ * Reschedule an appointment to a new bookable slot (Admin API).
+ */
+async function appointmentReschedule(
+  config,
+  { appointmentId, bookableTimeId, sendNotification = false }
+) {
+  const data = await gql(
+    config,
+    `mutation($input: AppointmentRescheduleInput!) {
+      appointmentReschedule(input: $input) {
+        appointment { ${APPOINTMENT_NODE} }
+      }
+    }`,
+    {
+      input: {
+        appointmentId,
+        bookableTimeId,
+        sendNotification: Boolean(sendNotification),
+      },
+    }
+  );
+  return data.appointmentReschedule.appointment;
+}
+
+/**
+ * Update appointment notes / open states (BOOKED|CONFIRMED|ACTIVE|ARRIVED).
+ * Note: FINAL is not a valid AppointmentStateInput — use finalizeAppointment.
+ */
+async function updateAppointment(config, { id, state, notes }) {
+  const input = { id };
+  if (state) input.state = state;
+  if (notes != null) input.notes = String(notes);
+  const data = await gql(
+    config,
+    `mutation($input: UpdateAppointmentInput!) {
+      updateAppointment(input: $input) {
+        appointment { ${APPOINTMENT_NODE} }
+      }
+    }`,
+    { input }
+  );
+  return data.updateAppointment.appointment;
+}
+
+/**
+ * Move an existing appointment to Final via Admin booking workflow:
+ * bookingCreateFromAppointment → bookingComplete.
+ * Requires appointment:write.
+ */
+async function finalizeAppointment(config, appointmentId, opts = {}) {
+  if (!appointmentId) throw new Error('appointmentId required');
+  const existing = opts.appointment || (await getAppointment(config, appointmentId));
+  if (!existing) {
+    const err = new Error(`Boulevard appointment not found: ${appointmentId}`);
+    err.code = 'APPOINTMENT_NOT_FOUND';
+    throw err;
+  }
+  if (String(existing.state || '').toUpperCase() === 'FINAL') {
+    return { appointment: existing, action: 'already_final', bookingId: null };
+  }
+  if (existing.cancelled) {
+    const err = new Error('Cannot finalize a cancelled appointment');
+    err.code = 'APPOINTMENT_CANCELLED';
+    throw err;
+  }
+
+  const staffId =
+    opts.staffId ||
+    existing.appointmentServices?.find((s) => s.staff?.id)?.staff?.id ||
+    null;
+  if (!staffId) {
+    const err = new Error(
+      'Cannot finalize: appointment has no staff (bookWithStaffId required)'
+    );
+    err.code = 'MISSING_STAFF';
+    throw err;
+  }
+
+  const created = await gql(
+    config,
+    `mutation($input: BookingCreateFromAppointmentInput!) {
+      bookingCreateFromAppointment(input: $input) {
+        booking { id }
+        bookingWarnings { code message }
+      }
+    }`,
+    { input: { appointmentId } }
+  );
+  const bookingId = created.bookingCreateFromAppointment?.booking?.id;
+  if (!bookingId) {
+    const err = new Error('bookingCreateFromAppointment returned no booking id');
+    err.code = 'BOOKING_CREATE_FAILED';
+    err.warnings = created.bookingCreateFromAppointment?.bookingWarnings || [];
+    throw err;
+  }
+
+  await gql(
+    config,
+    `mutation($input: BookingCompleteInput!) {
+      bookingComplete(input: $input) {
+        booking { id }
+        bookingWarnings { code message }
+      }
+    }`,
+    {
+      input: {
+        bookingId,
+        bookWithStaffId: staffId,
+        notifyClient: opts.notifyClient === true,
+      },
+    }
+  );
+
+  const appointment = await getAppointment(config, appointmentId);
+  return {
+    appointment,
+    action: 'finalized',
+    bookingId,
+    staffId,
+  };
+}
+
 async function listServices(config, first = 50, maxPages = 40) {
   const all = [];
   let after = null;
@@ -362,6 +567,12 @@ module.exports = {
   getClient,
   createClient,
   getAppointment,
+  cancelAppointment,
+  appointmentRescheduleAvailableDates,
+  appointmentRescheduleAvailableTimes,
+  appointmentReschedule,
+  updateAppointment,
+  finalizeAppointment,
   listRecentAppointments,
   getOrder,
   findAppointmentByOrderId,

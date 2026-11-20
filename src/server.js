@@ -24,6 +24,11 @@ const ADMIN_PATHS = new Set([
   '/sync-appointment',
   '/backfill-clients',
   '/book-consult',
+  // Feature 4.2.1 — HubSpot Meeting → Boulevard
+  '/meeting-booked',
+  '/meeting-rescheduled',
+  '/meeting-canceled',
+  '/meeting-outcome',
 ]);
 
 /** Returns null when allowed, else { status, error }. */
@@ -174,6 +179,23 @@ async function main() {
           required: required.length,
           excludedCount: (map?.excludedServiceIds || []).length,
           map,
+        });
+      }
+
+      if (req.method === 'GET' && url.pathname === '/health/meeting-types') {
+        const { loadMeetingTypes } = require('./meeting-types');
+        const { path, map } = loadMeetingTypes(config);
+        const types = map?.types || {};
+        const keys = Object.keys(types);
+        const withIds = keys.filter((k) => types[k]?.meetingTypeId);
+        return sendJson(res, 200, {
+          ok: Boolean(map) && keys.length >= 2,
+          path,
+          clinicLocationProperty: config.clinicLocationProperty,
+          typeCount: keys.length,
+          mappedMeetingTypeIds: withIds.length,
+          outcomes: Object.keys(map?.outcomes || {}),
+          types,
         });
       }
 
@@ -353,6 +375,149 @@ async function main() {
             diagnostic: err.diagnostic || null,
             times: err.times || null,
             dates: err.dates || null,
+          });
+        }
+      }
+
+      // Feature 4.2.1 — HubSpot Meeting workflows → middleware
+      if (req.method === 'POST' && url.pathname === '/meeting-booked') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const { processMeetingBooked } = require('./handlers/meeting-sync');
+        try {
+          const result = await processMeetingBooked(config, body);
+          return sendJson(res, 200, { ok: true, ...result });
+        } catch (err) {
+          const status =
+            err.code === 'MISSING_CONTACT' ||
+            err.code === 'MEETING_TYPE_UNMAPPED' ||
+            err.code === 'MEETING_TYPES_MISSING' ||
+            err.code === 'MISSING_SERVICE' ||
+            err.code === 'SERVICE_MAP_MISSING'
+              ? 400
+              : err.code === 'SERVICE_NOT_EXTERNALLY_BOOKABLE' ||
+                  err.code === 'NO_MATCHING_TIME' ||
+                  err.code === 'NO_BOOKABLE_DATES'
+                ? 409
+                : 500;
+          return sendJson(res, status, {
+            ok: false,
+            error: err.message,
+            code: err.code || null,
+            diagnostic: err.diagnostic || null,
+            times: err.times || null,
+            dates: err.dates || null,
+          });
+        }
+      }
+
+      if (req.method === 'POST' && url.pathname === '/meeting-rescheduled') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const { processMeetingRescheduled } = require('./handlers/meeting-sync');
+        try {
+          const result = await processMeetingRescheduled(config, body);
+          return sendJson(res, 200, { ok: true, ...result });
+        } catch (err) {
+          const status =
+            err.code === 'MISSING_APPOINTMENT' ||
+            err.code === 'MISSING_START' ||
+            err.code === 'APPOINTMENT_NOT_FOUND' ||
+            err.code === 'APPOINTMENT_CANCELLED'
+              ? 400
+              : err.code === 'NO_MATCHING_TIME'
+                ? 409
+                : err.code === 'BLVD_SCOPE_MISSING'
+                  ? 403
+                  : 500;
+          return sendJson(res, status, {
+            ok: false,
+            error: err.message,
+            code: err.code || null,
+            times: err.times || null,
+            localStart: err.localStart || null,
+            hint:
+              err.code === 'BLVD_SCOPE_MISSING'
+                ? 'Boulevard OAuth app needs appointment:write for reschedule/cancel'
+                : undefined,
+          });
+        }
+      }
+
+      if (req.method === 'POST' && url.pathname === '/meeting-canceled') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const { processMeetingCanceled } = require('./handlers/meeting-sync');
+        try {
+          const result = await processMeetingCanceled(config, body);
+          return sendJson(res, 200, { ok: true, ...result });
+        } catch (err) {
+          const status =
+            err.code === 'MISSING_APPOINTMENT' ||
+            err.code === 'APPOINTMENT_NOT_FOUND'
+              ? 400
+              : err.code === 'BLVD_SCOPE_MISSING'
+                ? 403
+                : 500;
+          return sendJson(res, status, {
+            ok: false,
+            error: err.message,
+            code: err.code || null,
+            hint:
+              err.code === 'BLVD_SCOPE_MISSING'
+                ? 'Boulevard OAuth app needs appointment:write for reschedule/cancel'
+                : undefined,
+          });
+        }
+      }
+
+      if (req.method === 'POST' && url.pathname === '/meeting-outcome') {
+        const rawBody = await readBody(req);
+        let body = {};
+        try {
+          body = JSON.parse(rawBody || '{}');
+        } catch {
+          return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+        }
+        const { processMeetingOutcome } = require('./handlers/meeting-sync');
+        try {
+          const result = await processMeetingOutcome(config, body);
+          return sendJson(res, 200, { ok: true, ...result });
+        } catch (err) {
+          const status =
+            err.code === 'OUTCOME_UNMAPPED' ||
+            err.code === 'MEETING_TYPES_MISSING' ||
+            err.code === 'MISSING_APPOINTMENT' ||
+            err.code === 'APPOINTMENT_NOT_FOUND' ||
+            err.code === 'APPOINTMENT_CANCELLED' ||
+            err.code === 'MISSING_STAFF'
+              ? 400
+              : err.code === 'BLVD_SCOPE_MISSING'
+                ? 403
+                : 500;
+          return sendJson(res, status, {
+            ok: false,
+            error: err.message,
+            code: err.code || null,
+            hint:
+              err.code === 'BLVD_SCOPE_MISSING'
+                ? 'Boulevard OAuth app needs appointment:write for Outcome → Final/Cancel'
+                : undefined,
           });
         }
       }

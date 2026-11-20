@@ -139,13 +139,31 @@ function getConfig() {
       (isProduction
         ? './config/service-map.production.json'
         : './config/service-map.staging.json'),
+    meetingTypesPath:
+      process.env.MEETING_TYPES_PATH ||
+      (isProduction
+        ? './config/meeting-types.production.json'
+        : './config/meeting-types.staging.json'),
     languageProperty: process.env.HUBSPOT_LANGUAGE_PROPERTY || 'language',
     blvdClientIdProperty:
       process.env.HUBSPOT_BLVD_CLIENT_ID_PROPERTY || 'blvd_client_id',
+    /**
+     * Contact property holding Clinic Location for HS→BLVD book (4.2.1).
+     * May be a BLVD location id/URN, or a HubSpot locations object id.
+     */
+    clinicLocationProperty:
+      process.env.HUBSPOT_CLINIC_LOCATION_PROPERTY || 'clinic_location',
     locationObject: process.env.HUBSPOT_LOCATION_OBJECT || 'locations',
     locationBlvdIdProperty:
       process.env.HUBSPOT_LOCATION_BLVD_ID_PROPERTY ||
       'location_external_id',
+    /**
+     * Contact ↔ HS Meeting association: store BLVD appointment id on the Meeting
+     * (or custom property) so reschedule/cancel/outcome can find the booking.
+     */
+    hsMeetingBlvdApptProperty:
+      process.env.HUBSPOT_MEETING_BLVD_APPT_PROPERTY ||
+      'blvd_appointment_id',
     /**
      * Durable pre-cutover marker (Dan/Joey Sep 22). Boolean Yes/No.
      * Set on A6 backfill; never cleared when lifecycle advances.
@@ -292,4 +310,5 @@ module.exports = {
   missingHubSpotIds,
   isProductionEnv,
   resolveFromRoot,
+  readJsonIfExists,
 };

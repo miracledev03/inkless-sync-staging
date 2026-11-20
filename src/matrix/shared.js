@@ -19,12 +19,17 @@ function isCancelled(appointment) {
 
 function isNoShowReason(appointment) {
   const reason = String(appointment?.cancellation?.reason || '').toUpperCase();
+  const notes = String(
+    appointment?.cancellation?.notes || appointment?.notes || ''
+  ).toUpperCase();
+  const hay = `${reason} ${notes}`;
   return (
-    reason.includes('NO_SHOW') ||
-    reason.includes('NOSHOW') ||
-    reason.includes('NO-SHOW') ||
-    reason.includes('DID_NOT_SHOW') ||
-    reason.includes('DID NOT SHOW')
+    hay.includes('NO_SHOW') ||
+    hay.includes('NOSHOW') ||
+    hay.includes('NO-SHOW') ||
+    hay.includes('DID_NOT_SHOW') ||
+    hay.includes('DID NOT SHOW') ||
+    hay.includes('CLIENT DID NOT SHOW UP')
   );
 }
 

@@ -1,0 +1,52 @@
+{
+  "env": "production",
+  "portalId": "50955637",
+  "notes": "Fill meetingTypeId + hsOwnerEmails/Ids from HubSpot production (Jeff/Josh first; Spanish later).",
+  "types": {
+    "virtual_consult_en": {
+      "serviceKey": "virtual_consult_en",
+      "label": "Virtual EN",
+      "meetingTypeId": "",
+      "meetingTypeName": "Virtual EN"
+    },
+    "virtual_consult_es": {
+      "serviceKey": "virtual_consult_es",
+      "label": "Virtual ES",
+      "meetingTypeId": "",
+      "meetingTypeName": "Virtual ES"
+    }
+  },
+  "staff": [
+    {
+      "label": "Jeff Garnett",
+      "hsOwnerEmails": [],
+      "hsOwnerIds": [],
+      "namePatterns": ["Jeff Garnett", "Jeff"],
+      "blvdStaffId": ""
+    },
+    {
+      "label": "Josh",
+      "hsOwnerEmails": [],
+      "hsOwnerIds": [],
+      "namePatterns": ["Josh"],
+      "blvdStaffId": ""
+    }
+  ],
+  "outcomes": {
+    "completed": {
+      "hsValues": ["COMPLETED", "Completed", "completed"],
+      "blvdState": "Final",
+      "cancelReason": null
+    },
+    "no_show": {
+      "hsValues": ["NO_SHOW", "No show", "No Show", "no_show"],
+      "blvdState": "Cancelled",
+      "cancelReason": "Client did not show up"
+    },
+    "canceled": {
+      "hsValues": ["CANCELED", "CANCELLED", "Canceled", "Cancelled", "canceled", "cancelled"],
+      "blvdState": "Cancelled",
+      "cancelReason": null
+    }
+  }
+}

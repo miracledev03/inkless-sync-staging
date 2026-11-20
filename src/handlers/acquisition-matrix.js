@@ -1,6 +1,7 @@
 const hs = require('../hubspot/client');
 const log = require('../logger');
 const { resolveInPersonConsultMatrix } = require('../matrix/in-person-consult');
+const { resolveVirtualConsultMatrix } = require('../matrix/virtual-consult');
 const { resolveFirstSession100Matrix } = require('../matrix/first-session-100');
 const { ensureAcquisitionDeal } = require('../acquisition-deals');
 const { ensureTreatmentJourneyDeal } = require('../journey-deals');
@@ -53,6 +54,9 @@ function resolveMatrixForRole(
   }
   if (role === 'in_office_consult') {
     return resolveInPersonConsultMatrix(appointment, eventType, classification);
+  }
+  if (role === 'virtual_consult_en' || role === 'virtual_consult_es') {
+    return resolveVirtualConsultMatrix(appointment, eventType, classification);
   }
   return { apply: false, reason: 'no_boulevard_matrix_for_role', role };
 }
@@ -116,7 +120,9 @@ async function applyMatrixResult(
   const dealName =
     role === 'first_session_100'
       ? `First Session — ${firstName}`.trim()
-      : `In-Person Consult — ${firstName}`.trim();
+      : role === 'virtual_consult_en' || role === 'virtual_consult_es'
+        ? `Virtual Consult — ${firstName}`.trim()
+        : `In-Person Consult — ${firstName}`.trim();
 
   const dealEnsure = await ensureAcquisitionDeal(config, contactId, {
     dealStage: matrix.dealStage,
@@ -305,6 +311,8 @@ module.exports = {
   applyAcquisitionMatrix,
   applyInPersonConsultMatrix,
   resolveInPersonConsultMatrix,
+  resolveVirtualConsultMatrix: require('../matrix/virtual-consult')
+    .resolveVirtualConsultMatrix,
   resolveFirstSession100Matrix,
   resolveMatrixForRole,
   fetchContactLifecycle,

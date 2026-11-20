@@ -6,6 +6,13 @@ const { loadServiceMap } = require('../config');
 const { ORIGIN } = require('../origin');
 const { processQualifyPath } = require('./clients');
 const { processAppointmentWebhook } = require('./appointments');
+const { resolveClinicLocationId } = require('./clinic-location');
+const {
+  matchBookableTime,
+  toLocationLocalNaive,
+  localDateFromStart,
+} = require('../time');
+const { resolveStaffVariant } = require('../staff-map');
 
 const SERVICE_KEYS = [
   'virtual_consult_en',
@@ -52,34 +59,6 @@ function resolveServiceId(map, body) {
   );
   err.code = 'MISSING_SERVICE';
   throw err;
-}
-
-/**
- * Match a requested local/ISO start to a cartBookableTime id.
- * Accepts:
- * - bookableTimeId (passthrough)
- * - startTime / startAt as ISO or NaiveDateTime (YYYY-MM-DDTHH:mm[:ss])
- */
-function matchBookableTime(times, requested) {
-  if (!requested) return null;
-  const raw = String(requested).trim();
-  if (raw.includes('BookableTime') || raw.startsWith('urn:blvd:')) {
-    return times.find((t) => t.id === raw) || { id: raw, startTime: null };
-  }
-  const want = raw.replace(/\.\d+Z?$/, '').replace(/Z$/, '');
-  for (const t of times) {
-    const st = String(t.startTime || '')
-      .replace(/\.\d+Z?$/, '')
-      .replace(/Z$/, '');
-    if (st === want) return t;
-    if (st.startsWith(want) || want.startsWith(st.slice(0, 16))) return t;
-    const wantDate = want.slice(0, 10);
-    const wantHm = want.slice(11, 16);
-    const stDate = st.slice(0, 10);
-    const stHm = st.slice(11, 16);
-    if (wantDate && wantHm && stDate === wantDate && stHm === wantHm) return t;
-  }
-  return null;
 }
 
 async function ensureBlvdClient(config, contactId) {
@@ -153,7 +132,12 @@ async function bookConsult(config, body = {}) {
     null;
 
   const locations = await blvd.listLocations(config);
-  const locationId = body.locationId || locations[0]?.id || null;
+  const clinic = await resolveClinicLocationId(config, {
+    contactId: String(contactId),
+    locationId: body.locationId,
+    locations,
+  });
+  const locationId = clinic.locationId || null;
   if (!locationId) {
     const err = new Error('No Boulevard location available');
     err.code = 'NO_LOCATION';
@@ -161,6 +145,7 @@ async function bookConsult(config, body = {}) {
   }
   const location = locations.find((l) => l.id === locationId) || locations[0];
   const tz = location?.tz || 'America/Los_Angeles';
+  const locationSource = clinic.source;
 
   const { contact, blvdClientId } = await ensureBlvdClient(
     config,
@@ -243,13 +228,16 @@ async function bookConsult(config, body = {}) {
     serviceId;
 
   const variants = availableItem?.staffVariants || [];
-  const joeyVariant = variants.find((v) =>
-    /Joseph Rios|42e5b97d-7c6a-4d90-ba3d-908994ef205d/i.test(
-      `${v.staff || ''} ${v.staffId || ''} ${v.id || ''}`
-    )
-  );
-  const itemStaffVariantId =
-    body.itemStaffVariantId || joeyVariant?.id || variants[0]?.id || undefined;
+  const staffPick = resolveStaffVariant(variants, {
+    itemStaffVariantId: body.itemStaffVariantId,
+    staffId: body.staffId || body.blvdStaffId,
+    ownerEmail: body.ownerEmail || body.hsOwnerEmail,
+    ownerId: body.ownerId || body.hsOwnerId,
+    ownerName: body.ownerName || body.hsOwnerName || body.staffName,
+    staffMap: body.staffMap || [],
+  });
+  const itemStaffVariantId = staffPick.variant?.id || undefined;
+  const staffSource = staffPick.source;
 
   let cartAfterAdd;
   try {
@@ -280,11 +268,12 @@ async function bookConsult(config, body = {}) {
     ...clientOpts,
   });
 
-  const availabilityOnly =
-    body.availabilityOnly === true || body.dryRun === true;
+  const availabilityOnly = body.availabilityOnly === true;
+  const dryRun = body.dryRun === true;
   const requestedTime = body.bookableTimeId || body.startTime || body.startAt;
 
-  if (availabilityOnly || !requestedTime) {
+  // Availability catalogue probe (no specific start requested).
+  if ((availabilityOnly || dryRun) && !requestedTime) {
     const firstDate = dates[0]?.date;
     const times = firstDate
       ? await clientApi.cartBookableTimes(config, {
@@ -295,7 +284,7 @@ async function bookConsult(config, body = {}) {
         })
       : [];
     return {
-      action: availabilityOnly ? 'availability' : 'needs_start_time',
+      action: 'availability',
       origin: ORIGIN.HUBSPOT,
       contactId: String(contactId),
       blvdClientId,
@@ -304,18 +293,47 @@ async function bookConsult(config, body = {}) {
       serviceKey,
       itemId,
       itemStaffVariantId: itemStaffVariantId || null,
+      staffSource,
       locationId,
+      locationSource,
+      clinicLocationRaw: clinic.raw,
       tz,
       dates: dates.map((d) => d.date),
       sampleTimes: times,
       selectedItems: cartAfterAdd?.selectedItems || [],
       diagnostic,
-      hint: 'POST again with startTime (location local NaiveDateTime) or bookableTimeId',
+      hint: 'POST again with startTime (location local NaiveDateTime or UTC ISO) or bookableTimeId',
+    };
+  }
+
+  if (!requestedTime) {
+    return {
+      action: 'needs_start_time',
+      origin: ORIGIN.HUBSPOT,
+      contactId: String(contactId),
+      blvdClientId,
+      cartId: cart.id,
+      serviceId,
+      serviceKey,
+      itemId,
+      itemStaffVariantId: itemStaffVariantId || null,
+      staffSource,
+      locationId,
+      locationSource,
+      clinicLocationRaw: clinic.raw,
+      tz,
+      dates: dates.map((d) => d.date),
+      selectedItems: cartAfterAdd?.selectedItems || [],
+      diagnostic,
+      hint: 'POST again with startTime (location local NaiveDateTime or UTC ISO) or bookableTimeId',
     };
   }
 
   const startRaw = String(body.startTime || body.startAt || '');
-  let searchDate = startRaw.slice(0, 10);
+  const localStart = toLocationLocalNaive(startRaw || requestedTime, tz);
+  let searchDate =
+    localDateFromStart(startRaw || requestedTime, tz) ||
+    localStart.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(searchDate)) {
     searchDate = dates[0]?.date;
   }
@@ -332,16 +350,43 @@ async function bookConsult(config, body = {}) {
     tz,
     ...clientOpts,
   });
-  const matched = matchBookableTime(times, requestedTime);
+  const matched = matchBookableTime(times, requestedTime, tz);
   if (!matched?.id) {
     const err = new Error(
-      `No matching bookable time for ${requestedTime} on ${searchDate}`
+      `No matching bookable time for ${requestedTime} (local ${localStart || 'n/a'}) on ${searchDate}`
     );
     err.code = 'NO_MATCHING_TIME';
     err.times = times;
     err.dates = dates.map((d) => d.date);
+    err.localStart = localStart || null;
     err.diagnostic = diagnostic;
     throw err;
+  }
+
+  // Dry-run with a start: prove same-slot match + staff/location without checkout.
+  if (dryRun || availabilityOnly) {
+    return {
+      action: 'would_book',
+      origin: ORIGIN.HUBSPOT,
+      contactId: String(contactId),
+      blvdClientId,
+      cartId: cart.id,
+      serviceId,
+      serviceKey,
+      itemId,
+      itemStaffVariantId: itemStaffVariantId || null,
+      staffSource,
+      locationId,
+      locationSource,
+      clinicLocationRaw: clinic.raw,
+      tz,
+      bookableTimeId: matched.id,
+      startTime: matched.startTime,
+      localStart: localStart || null,
+      dates: dates.map((d) => d.date),
+      diagnostic,
+      hint: 'Pass dryRun=false to reserve + checkout this slot',
+    };
   }
 
   await clientApi.reserveBookableTime(config, {
@@ -363,7 +408,8 @@ async function bookConsult(config, body = {}) {
       lastName: contact.properties?.lastname || undefined,
       phoneNumber: phone,
     },
-    clientMessage: body.clientMessage || 'Booked via HubSpot (Inkless 4.1 B10)',
+    clientMessage:
+      body.clientMessage || 'Booked via HubSpot Meeting (Inkless 4.2.1)',
     ...clientOpts,
   });
 
@@ -425,10 +471,14 @@ async function bookConsult(config, body = {}) {
     serviceKey,
     itemId,
     itemStaffVariantId: itemStaffVariantId || null,
+    staffSource,
     locationId,
+    locationSource,
+    clinicLocationRaw: clinic.raw,
     tz,
     bookableTimeId: matched.id,
     startTime: checkedOut.startTime || matched.startTime,
+    localStart: localStart || null,
     completedAt: checkedOut.completedAt,
     appointmentId,
     hubspot: hsUpsert,
@@ -471,4 +521,5 @@ async function findRecentAppointment(config, { clientId, locationId, startHint }
 module.exports = {
   SERVICE_KEYS,
   bookConsult,
+  matchBookableTime,
 };
