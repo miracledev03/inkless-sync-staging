@@ -14,8 +14,11 @@ function resolveServiceKeyFromMeeting(map, body = {}) {
   const typeId = String(
     body.meetingTypeId || body.hs_meeting_type_id || body.typeId || ''
   ).trim();
+  // Joey: Virtual EN / ES land as Meeting hs_activity_type (and often title).
   const typeName = String(
     body.meetingTypeName ||
+      body.hs_activity_type ||
+      body.activityType ||
       body.hs_meeting_title ||
       body.meetingName ||
       body.label ||
@@ -30,7 +33,13 @@ function resolveServiceKeyFromMeeting(map, body = {}) {
     }
   }
   for (const [key, row] of Object.entries(map.types)) {
-    const names = [row.meetingTypeName, row.label, key]
+    const names = [
+      row.meetingTypeName,
+      row.activityType,
+      row.hs_activity_type,
+      row.label,
+      key,
+    ]
       .filter(Boolean)
       .map((s) => String(s).toLowerCase());
     if (typeName && names.some((n) => n === typeName || typeName.includes(n))) {

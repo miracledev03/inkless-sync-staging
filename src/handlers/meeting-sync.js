@@ -45,6 +45,11 @@ function pickMeetingId(body = {}) {
     body.meetingId ||
     body.hs_meeting_id ||
     body.engagementId ||
+    // App Meeting subscription payloads use objectId for the Meeting.
+    (body.subscriptionType &&
+    String(body.subscriptionType).toLowerCase().includes('meeting')
+      ? body.objectId
+      : null) ||
     null
   );
 }
@@ -73,6 +78,7 @@ async function hydrateMeetingFromHubSpot(config, meetingId) {
   if (!meetingId) return null;
   const props = [
     'hs_meeting_title',
+    'hs_activity_type',
     'hs_meeting_start_time',
     'hs_meeting_end_time',
     'hs_meeting_outcome',
@@ -286,8 +292,12 @@ async function processMeetingBooked(config, body = {}) {
     ...body,
     meetingTypeName:
       body.meetingTypeName ||
+      body.hs_activity_type ||
+      meetingProps.hs_activity_type ||
       body.hs_meeting_title ||
       meetingProps.hs_meeting_title,
+    hs_activity_type:
+      body.hs_activity_type || meetingProps.hs_activity_type || undefined,
     meetingTypeId: body.meetingTypeId || body.hs_meeting_type_id,
     startTime:
       pickStartTime(body) ||

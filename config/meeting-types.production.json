@@ -7,13 +7,15 @@
       "serviceKey": "virtual_consult_en",
       "label": "Virtual EN",
       "meetingTypeId": "",
-      "meetingTypeName": "Virtual EN"
+      "meetingTypeName": "Virtual EN",
+      "activityType": "Virtual EN"
     },
     "virtual_consult_es": {
       "serviceKey": "virtual_consult_es",
       "label": "Virtual ES",
       "meetingTypeId": "",
-      "meetingTypeName": "Virtual ES"
+      "meetingTypeName": "Virtual ES",
+      "activityType": "Virtual ES"
     }
   },
   "staff": [

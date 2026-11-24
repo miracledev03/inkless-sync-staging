@@ -19,6 +19,7 @@
     "create:client": "node scripts/create-client.js",
     "verify:qualify": "node scripts/verify-qualify-path.js",
     "simulate:hs-qualify": "node scripts/simulate-hs-qualify-webhook.js",
+    "simulate:hs-meeting": "node scripts/simulate-hs-meeting-webhook.js",
     "discover:services": "node scripts/discover-services.js",
     "pull:hubspot-ids": "node scripts/pull-hubspot-ids.js",
     "check:env": "node scripts/check-env.js",
