@@ -31,6 +31,25 @@ function formatInTimeZone(date, timeZone) {
  * - Naive input (no Z/offset) is treated as already local.
  * - ISO with Z/offset is converted into `timeZone`.
  */
+/**
+ * HubSpot Meeting webhooks often send datetime propertyValue as epoch ms
+ * (e.g. "1795554900000"). `new Date("179555…")` is Invalid Date in Node — must
+ * coerce numeric strings explicitly.
+ */
+function parseAbsoluteDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^\d{10,13}$/.test(raw)) {
+    const n = Number(raw);
+    // 10-digit ≈ seconds; 13-digit ≈ milliseconds.
+    const ms = raw.length <= 10 ? n * 1000 : n;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function toLocationLocalNaive(value, timeZone = 'America/Los_Angeles') {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -41,8 +60,8 @@ function toLocationLocalNaive(value, timeZone = 'America/Los_Angeles') {
     return bare.length >= 19 ? bare.slice(0, 19) : `${bare.slice(0, 16)}:00`;
   }
 
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) {
+  const d = parseAbsoluteDate(raw);
+  if (!d) {
     return raw.replace(/\.\d+Z?$/, '').replace(/Z$/, '').slice(0, 19);
   }
   return formatInTimeZone(d, timeZone);
@@ -74,11 +93,12 @@ function matchBookableTime(times, requested, timeZone = 'America/Los_Angeles') {
   }
 
   // Absolute ms fallback when both parse as Date
-  const wantMs = Date.parse(raw);
-  if (!Number.isNaN(wantMs)) {
+  const wantDate = parseAbsoluteDate(raw);
+  if (wantDate) {
+    const wantMs = wantDate.getTime();
     for (const t of times) {
-      const stMs = Date.parse(String(t.startTime || ''));
-      if (!Number.isNaN(stMs) && Math.abs(stMs - wantMs) < 60 * 1000) return t;
+      const stDate = parseAbsoluteDate(t.startTime || '');
+      if (stDate && Math.abs(stDate.getTime() - wantMs) < 60 * 1000) return t;
     }
   }
   return null;
@@ -87,6 +107,7 @@ function matchBookableTime(times, requested, timeZone = 'America/Los_Angeles') {
 module.exports = {
   hasExplicitOffset,
   formatInTimeZone,
+  parseAbsoluteDate,
   toLocationLocalNaive,
   localDateFromStart,
   matchBookableTime,

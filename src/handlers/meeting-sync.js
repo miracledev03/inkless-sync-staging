@@ -550,7 +550,9 @@ async function processMeetingRescheduled(config, body = {}) {
     : null;
   const searchDate =
     localDateFromStart(startTime, tz) ||
-    (localStart ? localStart.slice(0, 10) : null);
+    (/^\d{4}-\d{2}-\d{2}/.test(String(localStart || ''))
+      ? String(localStart).slice(0, 10)
+      : null);
 
   let bookableTimeId = body.bookableTimeId || null;
   let matched = null;
