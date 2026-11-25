@@ -8,6 +8,10 @@ const { ensureTreatmentJourneyDeal } = require('../journey-deals');
 const { plannedDealPropertyUpdates } = require('../deal-properties');
 const { voidOrderForAppointment } = require('./orders');
 const { JOURNEY_STAGE } = require('../journey-stages');
+const {
+  isDealStageRegression,
+  isLifecycleRegression,
+} = require('../acquisition-stages');
 
 async function associateQuiet(token, fromType, fromId, toType, toId) {
   if (!fromId || !toId) return { ok: false, skipped: true };
@@ -136,8 +140,29 @@ async function applyMatrixResult(
     langProp,
     isNewDeal: dealEnsure.action === 'created',
   });
-  if (dealEnsure.deal?.properties?.dealstage !== matrix.dealStage) {
-    dealUpdates.dealstage = matrix.dealStage;
+  const currentDealStage = dealEnsure.deal?.properties?.dealstage || null;
+  let appliedDealStage = currentDealStage;
+  let dealStageSkipped = null;
+  if (currentDealStage !== matrix.dealStage) {
+    if (isDealStageRegression(currentDealStage, matrix.dealStage)) {
+      // U5: Meeting Outcome Completed → Attended, then BLVD CONFIRMED sync
+      // must not push the deal back to Consultation Booked.
+      dealStageSkipped = {
+        from: currentDealStage,
+        wouldSet: matrix.dealStage,
+        reason: 'no_regression',
+      };
+      log.info('acquisition matrix skipped dealstage regression', {
+        contactId,
+        dealId: dealEnsure.dealId,
+        ...dealStageSkipped,
+        matrix: matrix.matrix,
+        blvdState: matrix.blvdState,
+      });
+    } else {
+      dealUpdates.dealstage = matrix.dealStage;
+      appliedDealStage = matrix.dealStage;
+    }
   }
 
   if (Object.keys(dealUpdates).length) {
@@ -152,7 +177,9 @@ async function applyMatrixResult(
   result.deal = {
     action: dealEnsure.action,
     dealId: dealEnsure.dealId,
-    dealStage: matrix.dealStage,
+    dealStage: appliedDealStage,
+    matrixDealStage: matrix.dealStage,
+    dealStageSkipped,
     updated: Object.keys(dealUpdates),
     b9: {
       consultationType: consultType,
@@ -161,10 +188,34 @@ async function applyMatrixResult(
   };
 
   if (matrix.lifecycle) {
-    await hs.updateContact(config.hubspotToken, contactId, {
-      lifecyclestage: matrix.lifecycle,
-    });
-    result.lifecycle = { set: matrix.lifecycle };
+    let currentLifecycle = null;
+    try {
+      currentLifecycle = await fetchContactLifecycle(config, contactId);
+    } catch (err) {
+      log.warn('lifecycle read before matrix update failed', {
+        contactId,
+        error: err.message,
+      });
+    }
+    if (isLifecycleRegression(currentLifecycle, matrix.lifecycle)) {
+      log.info('acquisition matrix skipped lifecycle regression', {
+        contactId,
+        from: currentLifecycle,
+        wouldSet: matrix.lifecycle,
+        matrix: matrix.matrix,
+      });
+      result.lifecycle = {
+        skipped: true,
+        reason: 'no_regression',
+        from: currentLifecycle,
+        wouldSet: matrix.lifecycle,
+      };
+    } else {
+      await hs.updateContact(config.hubspotToken, contactId, {
+        lifecyclestage: matrix.lifecycle,
+      });
+      result.lifecycle = { set: matrix.lifecycle };
+    }
   } else if (
     matrix.path === 'skipped_consult' &&
     matrix.outcome &&

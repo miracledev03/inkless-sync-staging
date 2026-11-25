@@ -3,6 +3,13 @@
  */
 const hs = require('../hubspot/client');
 const log = require('../logger');
+const { getConfig, resolveFromRoot, readJsonIfExists } = require('../config');
+
+function loadClinicLocationAliases(config = getConfig()) {
+  const full = resolveFromRoot(config.clinicLocationsPath);
+  const map = readJsonIfExists(full);
+  return { path: full, aliases: map?.aliases || {} };
+}
 
 function matchLocation(locations, raw) {
   const value = String(raw || '').trim();
@@ -15,13 +22,45 @@ function matchLocation(locations, raw) {
   );
   if (byId) return byId;
   const lower = value.toLowerCase();
-  return (
+  const exact =
     locations.find(
       (l) =>
         String(l.name || '').toLowerCase() === lower ||
         String(l.businessName || '').toLowerCase() === lower
-    ) || null
+    ) || null;
+  if (exact) return exact;
+
+  // Fuzzy: "Philadelphia, Pennsylvania" ↔ BLVD "PA - PHILADELPHIA" / city.
+  const tokens = lower
+    .split(/[,\-_/]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3);
+  if (!tokens.length) return null;
+  return (
+    locations.find((l) => {
+      const hay = [
+        l.name,
+        l.businessName,
+        l.address?.city,
+        l.address?.state,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return tokens.some((t) => hay.includes(t));
+    }) || null
   );
+}
+
+function resolveAlias(aliases, raw) {
+  if (!raw || !aliases) return null;
+  const value = String(raw).trim();
+  if (aliases[value]) return String(aliases[value]);
+  const lower = value.toLowerCase();
+  for (const [key, id] of Object.entries(aliases)) {
+    if (String(key).toLowerCase() === lower) return String(id);
+  }
+  return null;
 }
 
 /**
@@ -60,6 +99,17 @@ async function resolveClinicLocationId(config, opts = {}) {
   }
 
   if (raw) {
+    const { aliases } = loadClinicLocationAliases(config);
+    const aliased = resolveAlias(aliases, raw);
+    if (aliased) {
+      const hit = matchLocation(locations, aliased) || { id: aliased };
+      return {
+        locationId: hit.id,
+        source: 'clinic_location_alias',
+        raw: String(raw),
+      };
+    }
+
     const direct = matchLocation(locations, raw);
     if (direct) {
       return { locationId: direct.id, source: 'contact_property', raw };
@@ -117,4 +167,6 @@ async function resolveClinicLocationId(config, opts = {}) {
 module.exports = {
   matchLocation,
   resolveClinicLocationId,
+  loadClinicLocationAliases,
+  resolveAlias,
 };

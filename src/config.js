@@ -153,6 +153,11 @@ function getConfig() {
      */
     clinicLocationProperty:
       process.env.HUBSPOT_CLINIC_LOCATION_PROPERTY || 'clinic_location',
+    clinicLocationsPath:
+      process.env.CLINIC_LOCATIONS_PATH ||
+      (isProduction
+        ? './config/clinic-locations.production.json'
+        : './config/clinic-locations.staging.json'),
     locationObject: process.env.HUBSPOT_LOCATION_OBJECT || 'locations',
     locationBlvdIdProperty:
       process.env.HUBSPOT_LOCATION_BLVD_ID_PROPERTY ||

@@ -1,0 +1,12 @@
+{
+  "env": "production",
+  "notes": "HubSpot contact clinic_location enum → Boulevard location IDs (pulled Nov 24, 2026).",
+  "aliases": {
+    "Colorado, Lakewood": "urn:blvd:Location:b0d193f7-7342-4aca-9898-6eef30ddb572",
+    "Wyoming, Casper": "urn:blvd:Location:16118c9e-a4d1-4bfb-8949-c6c653d771e0",
+    "New York, SoHo": "urn:blvd:Location:6e99ba61-4bab-4898-80c0-2bbe26bfc44d",
+    "New Jersey, Wayne": "urn:blvd:Location:d48c8936-f63e-4aea-9ede-afbc862f5d2a",
+    "New York, Long Island": "urn:blvd:Location:87130198-3d61-4181-9a9a-c275308a0462",
+    "Philadelphia, Pennsylvania": "urn:blvd:Location:a1e0525f-13ef-4323-9353-62e0ef0eaecd"
+  }
+}

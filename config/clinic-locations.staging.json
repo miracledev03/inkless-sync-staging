@@ -1,0 +1,12 @@
+{
+  "env": "sandbox",
+  "notes": "Sandbox Boulevard has a single location. Map all HubSpot clinic_location enum values to it so resolve is not fallback_unresolved.",
+  "aliases": {
+    "Colorado, Lakewood": "urn:blvd:Location:2e08439f-34dd-49ed-9c51-a957e9c59c09",
+    "Wyoming, Casper": "urn:blvd:Location:2e08439f-34dd-49ed-9c51-a957e9c59c09",
+    "New York, SoHo": "urn:blvd:Location:2e08439f-34dd-49ed-9c51-a957e9c59c09",
+    "New Jersey, Wayne": "urn:blvd:Location:2e08439f-34dd-49ed-9c51-a957e9c59c09",
+    "New York, Long Island": "urn:blvd:Location:2e08439f-34dd-49ed-9c51-a957e9c59c09",
+    "Philadelphia, Pennsylvania": "urn:blvd:Location:2e08439f-34dd-49ed-9c51-a957e9c59c09"
+  }
+}
