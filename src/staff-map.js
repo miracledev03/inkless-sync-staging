@@ -96,8 +96,56 @@ function resolveStaffVariant(variants, opts = {}) {
   return { variant: list[0], source: 'first_variant' };
 }
 
+/**
+ * Resolve a Boulevard staff URN without Client API staffVariants
+ * (Admin exact-time book path).
+ */
+function resolveStaffId(opts = {}) {
+  if (opts.staffId || opts.blvdStaffId) {
+    let id = String(opts.staffId || opts.blvdStaffId);
+    if (!id.startsWith('urn:blvd:Staff:')) {
+      id = `urn:blvd:Staff:${id.replace(/^urn:blvd:Staff:/i, '')}`;
+    }
+    return { staffId: id, source: 'body_staff_id' };
+  }
+
+  const staffRows = opts.staffMap || [];
+  for (const row of staffRows) {
+    if (!rowMatchesHints(row, opts)) continue;
+    if (row.blvdStaffId) {
+      let id = String(row.blvdStaffId);
+      if (!id.startsWith('urn:blvd:Staff:')) {
+        id = `urn:blvd:Staff:${id}`;
+      }
+      return {
+        staffId: id,
+        source: 'owner_map',
+        row: row.label || null,
+      };
+    }
+  }
+
+  // Staging default Joey
+  const joeyRow = staffRows.find((r) =>
+    /Joey|Joseph Rios|42e5b97d-7c6a-4d90-ba3d-908994ef205d/i.test(
+      `${r.label || ''} ${(r.namePatterns || []).join(' ')} ${r.blvdStaffId || ''}`
+    )
+  );
+  if (joeyRow?.blvdStaffId) {
+    let id = String(joeyRow.blvdStaffId);
+    if (!id.startsWith('urn:blvd:Staff:')) id = `urn:blvd:Staff:${id}`;
+    return { staffId: id, source: 'sandbox_joey_default' };
+  }
+
+  return {
+    staffId: 'urn:blvd:Staff:42e5b97d-7c6a-4d90-ba3d-908994ef205d',
+    source: 'sandbox_joey_hardcoded',
+  };
+}
+
 module.exports = {
   resolveStaffVariant,
+  resolveStaffId,
   findVariantForRow,
   rowMatchesHints,
 };

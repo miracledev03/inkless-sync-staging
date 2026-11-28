@@ -326,6 +326,11 @@ async function processMeetingBooked(config, body = {}) {
     locationId: body.locationId || undefined,
     startTime: enrichBody.startTime || undefined,
     bookableTimeId: body.bookableTimeId || undefined,
+    // Default: Admin exact-time book (bypasses Precision Scheduling / client slots).
+    bookingMode:
+      body.bookingMode ||
+      (body.forceClientCart ? 'client_cart' : 'admin'),
+    forceClientCart: body.forceClientCart === true,
     itemStaffVariantId: body.itemStaffVariantId || undefined,
     staffId: body.staffId || body.blvdStaffId,
     ownerEmail: enrichBody.ownerEmail,

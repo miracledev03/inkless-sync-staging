@@ -536,6 +536,222 @@ async function getOrder(config, id) {
 }
 
 /**
+ * Staff-side Admin booking at an exact start time (no Client cart / Precision Scheduling).
+ * Docs: bookingCreate → bookingAddService → bookingServiceSetStaff →
+ * bookingSetStartTime → bookingSetDeliveryMethod → bookingComplete.
+ * Admin API does not enforce client bookable slots when setting start time.
+ *
+ * @param {object} opts
+ * @param {string} opts.locationId
+ * @param {string} opts.clientId
+ * @param {string} opts.serviceId
+ * @param {string} opts.staffId
+ * @param {string} opts.startTime location-local NaiveDateTime (YYYY-MM-DDTHH:mm:ss) or ISO
+ * @param {string} [opts.deliveryMethod] VIDEO | PHONE | IN_PERSON (default VIDEO)
+ * @param {string} [opts.bookWithStaffId] defaults to staffId
+ * @param {string} [opts.notes]
+ * @param {boolean} [opts.notifyClient]
+ * @param {boolean} [opts.dryRun] stop before bookingComplete
+ */
+async function createAdminBooking(config, opts = {}) {
+  const locationId = opts.locationId;
+  const clientId = opts.clientId;
+  const serviceId = opts.serviceId;
+  const staffId = opts.staffId;
+  const startTime = String(opts.startTime || '').trim();
+  const deliveryMethod = String(opts.deliveryMethod || 'VIDEO').toUpperCase();
+  const bookWithStaffId = opts.bookWithStaffId || staffId;
+
+  if (!locationId || !clientId || !serviceId || !staffId || !startTime) {
+    const err = new Error(
+      'createAdminBooking requires locationId, clientId, serviceId, staffId, startTime'
+    );
+    err.code = 'MISSING_ADMIN_BOOK_INPUT';
+    throw err;
+  }
+
+  const created = await gql(
+    config,
+    `mutation($input: BookingCreateInput!) {
+      bookingCreate(input: $input) {
+        booking {
+          id
+          bookingClients { id }
+        }
+        bookingWarnings { code message }
+      }
+    }`,
+    { input: { locationId, clientId } }
+  );
+  const booking = created.bookingCreate?.booking;
+  const bookingId = booking?.id;
+  const bookingClientId = booking?.bookingClients?.[0]?.id;
+  if (!bookingId || !bookingClientId) {
+    const err = new Error('bookingCreate returned no booking / bookingClient id');
+    err.code = 'BOOKING_CREATE_FAILED';
+    err.warnings = created.bookingCreate?.bookingWarnings || [];
+    throw err;
+  }
+
+  const added = await gql(
+    config,
+    `mutation($input: BookingAddServiceInput!) {
+      bookingAddService(input: $input) {
+        bookingService { id }
+        bookingWarnings { code message }
+      }
+    }`,
+    {
+      input: {
+        bookingId,
+        bookingClientId,
+        serviceId,
+      },
+    }
+  );
+  const bookingServiceId = added.bookingAddService?.bookingService?.id;
+  if (!bookingServiceId) {
+    const err = new Error('bookingAddService returned no bookingService id');
+    err.code = 'BOOKING_ADD_SERVICE_FAILED';
+    err.warnings = added.bookingAddService?.bookingWarnings || [];
+    throw err;
+  }
+
+  const staffSet = await gql(
+    config,
+    `mutation($input: BookingServiceSetStaffInput!) {
+      bookingServiceSetStaff(input: $input) {
+        bookingService { id }
+        bookingWarnings { code message }
+      }
+    }`,
+    {
+      input: {
+        bookingId,
+        bookingServiceId,
+        staffId,
+      },
+    }
+  );
+
+  // Strip Z/offset — Admin expects location-local NaiveDateTime.
+  let naive = startTime;
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(naive) || /^\d{10,13}$/.test(naive)) {
+    const { toLocationLocalNaive } = require('../time');
+    const locs = await listLocations(config);
+    const loc = locs.find((l) => l.id === locationId);
+    naive = toLocationLocalNaive(startTime, loc?.tz || 'America/Los_Angeles');
+  }
+  naive = String(naive).replace(/\.\d+/, '').slice(0, 19);
+  if (naive.length === 16) naive = `${naive}:00`;
+
+  const timeSet = await gql(
+    config,
+    `mutation($input: BookingSetStartTimeInput!) {
+      bookingSetStartTime(input: $input) {
+        booking { id }
+        bookingWarnings { code message }
+      }
+    }`,
+    { input: { bookingId, startTime: naive } }
+  );
+
+  const deliveryInput = {
+    bookingId,
+    deliveryMethod,
+  };
+  if (deliveryMethod === 'IN_PERSON') {
+    deliveryInput.inPersonLocation = opts.inPersonLocation || 'BUSINESS';
+  }
+  if (opts.virtualMeetingUrlOverride) {
+    deliveryInput.virtualMeetingUrlOverride = opts.virtualMeetingUrlOverride;
+  }
+  if (opts.virtualJoiningInstructionsOverride) {
+    deliveryInput.virtualJoiningInstructionsOverride =
+      opts.virtualJoiningInstructionsOverride;
+  }
+
+  const deliverySet = await gql(
+    config,
+    `mutation($input: BookingSetDeliveryMethodInput!) {
+      bookingSetDeliveryMethod(input: $input) {
+        booking { id deliveryMethod }
+        bookingWarnings { code message }
+      }
+    }`,
+    { input: deliveryInput }
+  );
+
+  const warnings = [
+    ...(created.bookingCreate?.bookingWarnings || []),
+    ...(added.bookingAddService?.bookingWarnings || []),
+    ...(staffSet.bookingServiceSetStaff?.bookingWarnings || []),
+    ...(timeSet.bookingSetStartTime?.bookingWarnings || []),
+    ...(deliverySet.bookingSetDeliveryMethod?.bookingWarnings || []),
+  ];
+
+  if (opts.dryRun === true) {
+    return {
+      action: 'would_book_admin',
+      bookingId,
+      bookingServiceId,
+      staffId,
+      startTime: naive,
+      deliveryMethod,
+      warnings,
+    };
+  }
+
+  const completed = await gql(
+    config,
+    `mutation($input: BookingCompleteInput!) {
+      bookingComplete(input: $input) {
+        booking { id }
+        bookingAppointments {
+          appointment { ${APPOINTMENT_NODE} }
+        }
+        bookingWarnings { code message }
+      }
+    }`,
+    {
+      input: {
+        bookingId,
+        bookWithStaffId,
+        notifyClient: opts.notifyClient === true,
+      },
+    }
+  );
+
+  const appointment =
+    completed.bookingComplete?.bookingAppointments?.[0]?.appointment || null;
+  if (opts.notes && appointment?.id) {
+    try {
+      await updateAppointment(config, {
+        id: appointment.id,
+        notes: opts.notes,
+      });
+    } catch {
+      // notes are best-effort
+    }
+  }
+
+  return {
+    action: 'booked_admin',
+    bookingId,
+    bookingServiceId,
+    staffId,
+    startTime: naive,
+    deliveryMethod,
+    appointmentId: appointment?.id || null,
+    appointment,
+    warnings: [
+      ...warnings,
+      ...(completed.bookingComplete?.bookingWarnings || []),
+    ],
+  };
+}
+
+/**
  * Find BLVD appointment linked to an order (appointment.orderId match).
  */
 async function findAppointmentByOrderId(config, { orderId, clientId, locationId }) {
@@ -573,6 +789,7 @@ module.exports = {
   appointmentReschedule,
   updateAppointment,
   finalizeAppointment,
+  createAdminBooking,
   listRecentAppointments,
   getOrder,
   findAppointmentByOrderId,

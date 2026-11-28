@@ -11,8 +11,9 @@ const {
   matchBookableTime,
   toLocationLocalNaive,
   localDateFromStart,
+  parseAbsoluteDate,
 } = require('../time');
-const { resolveStaffVariant } = require('../staff-map');
+const { resolveStaffVariant, resolveStaffId } = require('../staff-map');
 
 const SERVICE_KEYS = [
   'virtual_consult_en',
@@ -152,6 +153,35 @@ async function bookConsult(config, body = {}) {
     String(contactId)
   );
   const clientOpts = { clientId: blvdClientId };
+
+  const requestedStart =
+    body.startTime || body.startAt || body.hs_meeting_start_time || null;
+  const forceClientCart =
+    body.forceClientCart === true ||
+    body.bookingMode === 'client_cart' ||
+    Boolean(body.bookableTimeId && !requestedStart);
+  const useAdminExactTime =
+    Boolean(requestedStart) &&
+    !forceClientCart &&
+    body.bookingMode !== 'client_cart';
+
+  // Feature 4.2.1 / Joey UAT: HubSpot Meeting times must land on Boulevard even
+  // when Precision Scheduling hides that slot from the Client API cart.
+  if (useAdminExactTime) {
+    return bookConsultAdminExactTime(config, {
+      body,
+      contactId: String(contactId),
+      contact,
+      blvdClientId,
+      serviceId,
+      serviceKey,
+      locationId,
+      locationSource,
+      clinic,
+      tz,
+      location,
+    });
+  }
 
   const cart = await clientApi.createCart(config, {
     locationId,
@@ -486,6 +516,159 @@ async function bookConsult(config, body = {}) {
       id: checkedOut.id,
       selectedItems: checkedOut.selectedItems,
     },
+  };
+}
+
+function deliveryMethodForService(serviceKey) {
+  if (serviceKey === 'in_office_consult') return 'IN_PERSON';
+  if (serviceKey === 'first_session_100') return 'IN_PERSON';
+  return 'VIDEO';
+}
+
+async function bookConsultAdminExactTime(
+  config,
+  {
+    body,
+    contactId,
+    contact,
+    blvdClientId,
+    serviceId,
+    serviceKey,
+    locationId,
+    locationSource,
+    clinic,
+    tz,
+    location,
+  }
+) {
+  const staffPick = resolveStaffId({
+    staffId: body.staffId || body.blvdStaffId,
+    ownerEmail: body.ownerEmail || body.hsOwnerEmail,
+    ownerId: body.ownerId || body.hsOwnerId,
+    ownerName: body.ownerName || body.hsOwnerName || body.staffName,
+    staffMap: body.staffMap || [],
+  });
+  if (!staffPick.staffId) {
+    const err = new Error(
+      'No Boulevard staffId for Admin exact-time book (set staffMap / staffId)'
+    );
+    err.code = 'MISSING_STAFF';
+    throw err;
+  }
+
+  const startRaw =
+    body.startTime || body.startAt || body.hs_meeting_start_time || '';
+  const localStart = toLocationLocalNaive(startRaw, tz);
+  if (!localStart || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(localStart)) {
+    const err = new Error(
+      `Could not parse startTime for Admin book: ${startRaw}`
+    );
+    err.code = 'MISSING_START';
+    throw err;
+  }
+
+  const dryRun = body.dryRun === true || body.availabilityOnly === true;
+  const deliveryMethod =
+    body.deliveryMethod || deliveryMethodForService(serviceKey);
+
+  if (dryRun) {
+    return {
+      action: 'would_book',
+      bookingMode: 'admin_exact_time',
+      origin: ORIGIN.HUBSPOT,
+      contactId,
+      blvdClientId,
+      serviceId,
+      serviceKey,
+      staffId: staffPick.staffId,
+      staffSource: staffPick.source,
+      locationId,
+      locationSource,
+      clinicLocationRaw: clinic.raw,
+      tz,
+      startTime: localStart,
+      localStart,
+      deliveryMethod,
+      hint: 'Pass dryRun=false to Admin-book this exact HubSpot time',
+    };
+  }
+
+  let adminBook;
+  try {
+    adminBook = await blvd.createAdminBooking(config, {
+      locationId,
+      clientId: blvdClientId,
+      serviceId,
+      staffId: staffPick.staffId,
+      startTime: localStart,
+      deliveryMethod,
+      bookWithStaffId: staffPick.staffId,
+      notes:
+        body.clientMessage ||
+        'Booked via HubSpot Meeting — Admin exact time (Inkless 4.2.1)',
+      notifyClient: body.notifyClient === true,
+      virtualMeetingUrlOverride: body.virtualMeetingUrlOverride,
+      virtualJoiningInstructionsOverride:
+        body.virtualJoiningInstructionsOverride,
+    });
+  } catch (err) {
+    err.bookingMode = 'admin_exact_time';
+    err.staffId = staffPick.staffId;
+    err.localStart = localStart;
+    err.locationId = locationId;
+    throw err;
+  }
+
+  let hsUpsert = null;
+  const appointmentId = adminBook.appointmentId || null;
+  try {
+    if (appointmentId) {
+      hsUpsert = await processAppointmentWebhook(config, {
+        eventType: 'APPOINTMENT_CREATED',
+        payload: { resourceId: appointmentId },
+        forceOrigin: ORIGIN.HUBSPOT,
+      });
+    }
+  } catch (err) {
+    log.warn('Admin exact-time HS upsert deferred to webhook', {
+      error: err.message,
+      appointmentId,
+    });
+  }
+
+  log.info('B10 admin exact-time book complete', {
+    contactId,
+    blvdClientId,
+    serviceId,
+    appointmentId,
+    startTime: localStart,
+    staffId: staffPick.staffId,
+    warnings: adminBook.warnings || [],
+  });
+
+  return {
+    action: 'booked',
+    bookingMode: 'admin_exact_time',
+    origin: ORIGIN.HUBSPOT,
+    contactId,
+    blvdClientId,
+    serviceId,
+    serviceKey,
+    staffId: staffPick.staffId,
+    staffSource: staffPick.source,
+    locationId,
+    locationSource,
+    clinicLocationRaw: clinic.raw,
+    tz,
+    startTime: adminBook.appointment?.startAt || localStart,
+    localStart,
+    deliveryMethod,
+    appointmentId,
+    bookingId: adminBook.bookingId,
+    warnings: adminBook.warnings || [],
+    hubspot: hsUpsert,
+    locationName: location?.name || null,
+    absoluteStart: parseAbsoluteDate(startRaw)?.toISOString?.() || null,
   };
 }
 
